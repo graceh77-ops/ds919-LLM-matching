@@ -1,4 +1,4 @@
-# Evaluating LLM-Assisted Matching
+﻿# Evaluating LLM-Assisted Matching
 
 ## Project Overview
 
@@ -20,8 +20,8 @@ How does LLM-assisted covariate prioritization or weighting affect matching
 quality and causal effect estimates compared with conventional matching
 approaches?
 
-The exact LLM role, matching algorithm, comparison methods, and target 
-estimand will be specified in the analysis protocol before the final 
+The exact LLM role, matching algorithm, comparison methods, and target
+estimand will be specified in the analysis protocol before the final
 evaluation.
 
 ## Evaluation Approach
@@ -54,12 +54,13 @@ The case study uses the 2024 CDC Natality Public Use File.
 - **Outcome:** `DBWT`
   - Birth weight in grams
   - `9999`: not-stated code
-- **Candidate covariates:** documented in `docs/`
+- **Candidate covariates:** documented in
+  [`docs/maternal_smoking_birthweight/`](docs/maternal_smoking_birthweight/)
 
-Records with unknown treatment status or missing birth weight are excluded from
-the primary analysis cohort. Their counts are recorded in the data-quality
-summary. Candidate covariates and their missing values are handled according
-to the analysis protocol.
+Records with unknown treatment status or missing birth weight are excluded
+from the primary analysis cohort. Their counts are recorded in the
+data-quality summary. Candidate covariates and their missing values are
+handled according to the analysis protocol.
 
 ## Data
 
@@ -67,3 +68,12 @@ The fixed-width source file is stored locally at:
 
 ```text
 data/raw/2024/Nat2024us/Nat2024PublicUS.c20250512.r20250708.txt
+```
+
+## Documentation
+
+- [`docs/llm_matching/`](docs/llm_matching/) contains the general LLM matching
+  evaluation protocol.
+- [`docs/maternal_smoking_birthweight/`](docs/maternal_smoking_birthweight/)
+  contains the Natality case-study plan, analysis protocol, extraction details,
+  data dictionary, and covariate review.

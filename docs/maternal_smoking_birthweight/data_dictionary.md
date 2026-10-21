@@ -6,7 +6,8 @@ Guide: https://ftp.cdc.gov/pub/Health_Statistics/NCHS/Dataset_Documentation/DVS/
 ## Scope
 This document currently defines the treatment and outcome variables.
 Definitions and field positions for candidate covariates are documented in
-`covariate_inventory.md` and `extraction_spec.md`. The final analysis data
+[`covariate_inventory.md`](covariate_inventory.md) and
+[`extraction_spec.md`](extraction_spec.md). The final analysis data
 dictionary will be updated after the covariate set and recoding rules are
 finalized.
 

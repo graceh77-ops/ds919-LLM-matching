@@ -2,7 +2,8 @@
 
 ## Purpose
 
-This document screens variables listed in `covariate_inventory.md`
+This document screens variables listed in
+[`covariate_inventory.md`](covariate_inventory.md)
 for their possible roles in estimating the effect of maternal smoking
 during pregnancy on birth weight.
 

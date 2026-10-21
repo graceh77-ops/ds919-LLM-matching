@@ -36,7 +36,8 @@ effect of maternal smoking during pregnancy on birth weight?
 
 ## Covariates
 
-- Start with the provisional primary candidate set in `covariate_screening.md`.
+- Start with the provisional primary candidate set in
+  [`covariate_screening.md`](covariate_screening.md).
 - Do not use variables that may occur after smoking exposure begins in the
   primary matching set unless the causal diagram and timing review support it.
 - Report missingness for each selected covariate and the number of records

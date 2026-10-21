@@ -78,7 +78,8 @@ These fields are measured during pregnancy or at delivery. They may be affected 
 
 ## Treatment and outcome cross-reference
 
-The treatment fields are documented in `data_dictionary.md`:
+The treatment fields are documented in
+[`data_dictionary.md`](data_dictionary.md):
 
 - `CIG_1`, `CIG_2`, `CIG_3`: cigarettes smoked daily in each trimester
 - `CIG1_R`, `CIG2_R`, `CIG3_R`: trimester-specific recodes
