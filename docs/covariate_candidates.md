@@ -7,13 +7,15 @@ The timing and causal role of each variable must be reviewed before matching.
 
 ## Candidate pool
 
-| Variable | Initial role | Why consider it? | Caution |
+| Variable | Initial role | Rationale | Caution |
 |---|---|---|---|
 | MAGER | Baseline candidate | Mother's age | Check age coding and imputation |
 | MRACEHISP | Baseline social-context candidate | Mother's race and Hispanic origin | Treat as a social-context measure, not a biological cause |
 | MEDUC | Baseline candidate | Mother's education | Categories; unknown values need handling |
 | DMAR | Timing unclear | Mother's marital status | Recorded for the birth; may not reflect status before pregnancy |
 | CIG0_R | Pre-pregnancy history | Cigarette use before pregnancy may relate to smoking during pregnancy | Keep distinct from the treatment definition |
+| `CIG_0` | Alternative measure of baseline smoking history | Preserves more detail about pre-pregnancy smoking intensity | Retain for data checks and sensitivity analysis; do not include together with `CIG0_R` in the primary set |
+| `F_CIGS_0` | Data-quality field | Indicates whether pre-pregnancy smoking was reported | Use to review reporting; exclude from matching |
 | BMI or BMI_R | Baseline candidate | Mother's body mass index | Choose continuous or recoded form, not both |
 | PWgt_R | Baseline candidate | Mother's pre-pregnancy weight | Overlaps with BMI and height |
 | M_Ht_In | Baseline candidate | Mother's height | Overlaps with BMI |

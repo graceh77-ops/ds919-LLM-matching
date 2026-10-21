@@ -3,6 +3,14 @@
 Source: CDC User Guide to the 2024 Natality Public Use File
 Guide: https://ftp.cdc.gov/pub/Health_Statistics/NCHS/Dataset_Documentation/DVS/natality/UserGuide2024.pdf
 
+## Scope
+This document currently defines the treatment and outcome variables.
+Definitions and field positions for candidate covariates are documented in
+`covariate_inventory.md` and `extraction_spec.md`. The final analysis data
+dictionary will be updated after the covariate set and recoding rules are
+finalized.
+
+
 | Role | Field | Record positions | Meaning and values |
 |---|---|---:|---|
 # Treatment Data: Cigarette Smoking
