@@ -3,8 +3,7 @@
 This document holds the candidate list, field inventory, and provisional
 causal screening for the study of maternal smoking during pregnancy and birth
 weight. The roles below are working judgments, not CDC classifications or a
-final adjustment set. Review them against the estimand before matching. 
-Do not assign LLM weights until the primary set is settled.
+final adjustment set. Do not assign LLM weights until the primary set is settled.
 
 Field positions refer to the 2024 fixed-width record. See
 [`data_reference.md`](data_reference.md) for source and extraction details.
@@ -53,6 +52,37 @@ smoking, mediate its effect, or reflect care decisions.
 |---|---:|---|---|
 | `DPLURAL` | 454 | Plurality | Primary cohort is singleton births; consider all-births cohort as a sensitivity analysis |
 | `SEX` | 475 | Infant sex | Strongly predicts birth weight, but is not automatically a confounder; decide whether to use in a secondary specification |
+
+## Proposed first-pass adjustment set (draft)
+
+This is a proposal for discussion, not a finalized set. It uses fields already
+present in `extracted_natality.csv` and limits the primary set to plausible
+pre-exposure characteristics.
+
+| Proposed role | Fields | Rationale / handling |
+|---|---|---|
+| Primary set | `MAGER`, `MRACEHISP`, `MEDUC` | Maternal age and social-context measures may relate to both smoking and birth weight. Treat race/Hispanic-origin as social context, not biology. |
+| Primary set | `CIG0_R` | Pre-pregnancy smoking is a strong baseline predictor of smoking during pregnancy; CDC categories are 0 (nonsmoker), 1-5 (intensity groups), and 6 (unknown/not stated). |
+| Primary set | `PRIORLIVE`, `PRIORDEAD` | Prior birth history precedes the index birth and may relate to both smoking patterns and birth outcomes. |
+| Primary set | `BMI_R` | CDC's BMI measure represents pre-pregnancy BMI; use the recoded form available in this extract. Do not include `PWgt_R` alongside it in the primary set. |
+| Primary set | `RF_PDIAB`, `RF_PHYPE` | Pre-pregnancy diabetes and hypertension are baseline health characteristics; use reporting flags for data-quality review, not as matching variables. |
+| Primary prognostic covariate | `SEX` | Infant sex is strongly predictive of birth weight. Include it to balance this prognostic factor; do not describe it as an established confounder. |
+| Sensitivity alternative | `CIG_0` instead of `CIG0_R` | Compare the more detailed daily count with the recode; do not enter both together. |
+| Sensitivity alternative | `PWgt_R` instead of `BMI_R` | Compare pre-pregnancy weight with BMI; do not enter both together by default. |
+| Sensitivity addition | `DMAR` | Add only as a sensitivity check because it is recorded at birth and may not represent marital status before pregnancy. |
+| Sensitivity only | `COMBGEST` or `GESTREC10` | Gestational length may mediate part of smoking's effect on birth weight. Add only in a separately labeled sensitivity analysis and interpret its estimate accordingly. Prefer `COMBGEST` for weeks; `GESTREC10` is a coarser category alternative. |
+| All-births sensitivity | `DPLURAL` | The primary cohort is all singletons, so plurality is constant there. Consider plurality in the all-births sensitivity analysis; it is not part of the singleton primary set. |
+
+### Additional baseline fields worth considering
+
+`RF_PPTERM` and `RF_CESAR` are plausible prior-pregnancy history measures but
+are not included in the current extraction. They can be revisited after the
+first covariate missingness and balance summaries.
+
+Gestational length is not a baseline confounder for this question. Its
+sensitivity-only role is intentional because it may lie on the pathway from
+pregnancy smoking to birth weight. Retain the imputation and source flags to
+describe how the gestational estimate was constructed.
 
 ## Decisions to make before matching
 
