@@ -1,0 +1,13 @@
+# Individual-level raw and processed data
+data/
+
+# API keys and local settings
+.env
+.env.*
+!.env.example
+
+# Python environment and temporary files
+.venv/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
