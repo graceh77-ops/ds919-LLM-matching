@@ -20,6 +20,9 @@
 | `MEDUC` | 124 | 1 | Mother's education | Potential baseline covariate | Code `9` means unknown |
 | `PRIORLIVE` | 171–172 | 2 | Prior births now living | Potential baseline covariate | Code `99` means unknown or not stated |
 | `PRIORDEAD` | 173–174 | 2 | Prior births now dead | Potential baseline covariate | Code `99` means unknown or not stated |
+| `CIG_0` | 253–254 | 2 | Cigarettes smoked daily before pregnancy | Baseline smoking-history candidate | `98` means 98 or more; `99` means unknown or not stated |
+| `CIG0_R` | 261 | 1 | Recode of cigarettes smoked before pregnancy | Primary baseline smoking-history candidate | `0` means nonsmoker; `1`–`5` are smoking categories; `6` means unknown or not stated |
+| `F_CIGS_0` | 265 | 1 | Reporting flag for cigarettes before pregnancy | Data-quality audit field | `0` non-reporting; `1` reporting |
 | `CIG1_R` | 262 | 1 | Cigarettes in first trimester, recoded | Treatment audit field | Codes `0`–`5`; `6` means unknown or not stated |
 | `CIG2_R` | 263 | 1 | Cigarettes in second trimester, recoded | Treatment audit field | Codes `0`–`5`; `6` means unknown or not stated |
 | `CIG3_R` | 264 | 1 | Cigarettes in third trimester, recoded | Treatment audit field | Codes `0`–`5`; `6` means unknown or not stated |

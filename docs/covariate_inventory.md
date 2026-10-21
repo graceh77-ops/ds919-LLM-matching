@@ -35,6 +35,7 @@ Positions and coding may differ in other years.
 
 | Field | Position | What it measures | Timing or review note |
 |---|---:|---|---|
+| CIG_0 | 253-254 | Cigarette use before pregnancy | Likely to predict smoking during pregnancy; measures smoking intensity, may represent prior exposure or act as a proxy for factors related to birth weight, retain for sensitivity analysis; do not include with CIG0_R in the primary set |
 | CIG0_R | 261 | Cigarette use before pregnancy, recoded | Prior behavior; keep separate from the treatment |
 | F_CIGS_0 | 265 | Reporting flag for cigarettes before pregnancy | Check before interpreting blank or missing values |
 | M_Ht_In | 280–281 | Mother's height in inches | Candidate; overlaps with BMI-related information |
