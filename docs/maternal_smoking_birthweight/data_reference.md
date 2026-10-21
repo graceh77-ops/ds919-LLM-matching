@@ -44,7 +44,17 @@
 | `BMI_R` | 287 | Maternal BMI category; 9 unknown/not stated |
 | `PWgt_R` | 292-294 | Pre-pregnancy weight recode; 999 unknown/not stated |
 | `F_PWGT` | 295 | Reporting flag for pre-pregnancy weight |
+| `RF_PDIAB` | 313 | Pre-pregnancy diabetes: Y yes, N no, U unknown/not stated |
+| `RF_PHYPE` | 315 | Pre-pregnancy hypertension: Y yes, N no, U unknown/not stated |
+| `F_RF_PDIAB` | 319 | Reporting flag for pre-pregnancy diabetes; audit only |
+| `F_RF_PHYPER` | 321 | Reporting flag for pre-pregnancy hypertension; audit only |
 | `DPLURAL` | 454 | Plurality: 1 single, 2 twin, 3 triplet, 4 quadruplet or higher |
+| `SEX` | 475 | Infant sex: M male, F female |
+| `IMP_SEX` | 476 | Infant sex imputation flag; audit only |
+| `COMPGST_IMP` | 488 | Combined gestation imputation flag; audit only |
+| `OBGEST_FLG` | 489 | Flag that obstetric estimate was used; audit only |
+| `COMBGEST` | 490-491 | Combined gestation in weeks: 17-47, 99 unknown |
+| `GESTREC10` | 492-493 | Combined gestation, 10-category recode; 99 unknown |
 | `DBWT` | 504-507 | Edited birth weight in grams; 9999 not stated; User Guide range 227-8165 |
 | `BWTR12` | 509-510 | Birth-weight recode, 12 categories; 12 not stated |
 | `BWTR4` | 511 | Birth-weight recode, 4 categories; 4 unknown/not stated |
