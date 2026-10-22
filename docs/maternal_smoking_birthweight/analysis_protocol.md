@@ -59,12 +59,14 @@ effect of maternal smoking during pregnancy on birth weight?
 
 ## Covariates
 
-- Primary set under review: `MAGER`, `MRACEHISP`, `MEDUC`, `CIG0_R`,
+- Primary set: `MAGER`, `MRACEHISP`, `MEDUC`, `CIG0_R`,
   `PRIORLIVE`, `PRIORDEAD`, `BMI_R`, `RF_PDIAB`, `RF_PHYPE`, and `SEX`.
 - Treat `SEX` as a prognostic covariate for birth weight, not as an established
   confounder.
-- Consider `COMBGEST` or `GESTREC10` only in a separately labeled sensitivity
-  analysis because gestational length may mediate the effect of smoking.
+- Include `COMBGEST` only in a separately labeled sensitivity analysis because
+  gestational length may mediate the effect of smoking; use `GESTREC10` as a
+  coarser alternative if needed. Conditioning on gestational length changes
+  the estimand and does not by itself identify a direct effect.
 - See [`covariate_review.md`](covariate_review.md) for rationales and
   alternatives under consideration.
 - Do not use variables that may occur after smoking exposure begins in the
@@ -85,6 +87,6 @@ effect of maternal smoking during pregnancy on birth weight?
 
 ## Decisions still to confirm
 
-- Confirm the final primary covariate set.
 - Confirm the covariate missing-data rule.
+- Confirm how gestational length will be used and reported in sensitivity analysis.
 - Confirm the matching algorithm and caliper after the data format is checked.

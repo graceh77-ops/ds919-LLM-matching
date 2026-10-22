@@ -6,23 +6,26 @@ when estimating the effect of maternal smoking during pregnancy on birth weight?
 
 ## 2. Data
 - Source: CDC Natality public-use data
-- Years: TBD
+- Years: 2024
 - Unit of observation: one live-birth record
-- Study population: TBD
+- Study population: singleton live births for the primary analysis; all births
+  with known treatment and valid birth weight for sensitivity analysis
 
 ## 3. Treatment
 - Concept: maternal cigarette smoking during pregnancy
-- Working definition: any reported smoking during pregnancy(>= 1 trimester) vs. no reported smoking
-- Exact variable and code values: TBD
+- Working definition: `CIG_REC = Y` vs. `CIG_REC = N`
+- Unknown treatment status (`U`) is excluded, not classified as nonsmoking.
 
 ## 4. Outcome
 - Concept: birth weight
-- Measurement: birth weight in grams
-- Exact variable and special codes: TBD
+- Measurement: edited birth weight in grams (`DBWT`)
+- `9999` is not stated; unavailable or invalid values are excluded.
 
 ## 5. Covariates
-- Candidate covariates: TBD
-- Selection rationale: TBD
+- Selected primary set: `MAGER`, `MRACEHISP`, `MEDUC`, `CIG0_R`, `PRIORLIVE`,
+  `PRIORDEAD`, `BMI_R`, `RF_PDIAB`, `RF_PHYPE`, and `SEX`.
+- See [`covariate_review.md`](covariate_review.md) for rationale and planned
+  sensitivity variables.
 - Variables that may occur after treatment or lie on the pathway to birth weight: review before including
 
 ## 6. Matching comparison
@@ -38,8 +41,6 @@ when estimating the effect of maternal smoking during pregnancy on birth weight?
 - Use a benchmark with known or constructed ground truth if evaluating estimation accuracy
 
 ## 8. Open decisions
-- Study years: TBD
-- Study population: TBD
-- Treatment definition: TBD
-- Estimand: TBD
+- Final covariate missing-data rule: TBD
+- Confirm whether the primary estimand is the matched-sample ATT: TBD
 - Matching and evaluation details: TBD
