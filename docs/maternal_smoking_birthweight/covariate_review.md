@@ -84,7 +84,7 @@ sensitivity-only role is intentional because it may lie on the pathway from
 pregnancy smoking to birth weight. Retain the imputation and source flags to
 describe how the gestational estimate was constructed.
 
-## Remaining covariate decisions
+## Covariate handling decisions and remaining questions
 
 - Keep the primary representation choices explicit: `CIG0_R` over `CIG_0`,
   `BMI_R` over `PWgt_R` or `M_Ht_In`, and `PRIORLIVE` plus `PRIORDEAD` instead
@@ -92,4 +92,8 @@ describe how the gestational estimate was constructed.
 - Decide whether to add `DMAR` or other optional candidates in a sensitivity
   analysis after reviewing timing and missingness.
 - Exclude reporting flags from matching; use them to interpret item reporting.
-- Specify unknown-code and missing-data handling for the selected variables.
+- Missing-data rule selected: use flag-aware complete cases for both singleton
+  primary and all-births sensitivity cohorts. Require recognized values for
+  all primary covariates and reporting flags `F_MHISP`, `F_MEDUC`, `F_CIGS_0`,
+  `F_M_HT`, `F_PWGT`, `F_RF_PDIAB`, and `F_RF_PHYPER` equal to `1`. Retain
+  CDC-imputed age, race, and sex values and report their imputation flags.

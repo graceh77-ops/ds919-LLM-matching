@@ -6,9 +6,15 @@
 - Primary analysis cohort (singleton births): `data\processed\2024\analysis_cohort_singletons.csv`
 - Sensitivity cohort (all eligible births): `data\processed\2024\analysis_cohort_all_births.csv`
 - Input rows: 3,638,436
-- All-births cohort rows: 3,617,844
-- Singleton primary cohort rows (`DPLURAL = 1`): 3,506,582
+- All-births eligible rows before covariate filtering: 3,617,844
+- Singleton primary eligible rows before covariate filtering (`DPLURAL = 1`): 3,506,582
 - Eligible non-singleton births excluded from primary cohort: 111,262
+- All-births records meeting the flag-aware covariate rule: 3,441,582
+- All-births records excluded for incomplete/unknown covariates or non-reporting flags: 176,262
+- Singleton records meeting the flag-aware covariate rule: 3,336,235
+- Singleton records excluded by the flag-aware covariate rule: 170,347
+- Final all-births sensitivity file rows: 3,441,582
+- Final singleton primary file rows: 3,336,235
 
 ## Treatment values in the input
 
@@ -28,9 +34,21 @@
 
 - `CIG_REC = Y` (treatment_binary = 1): 86,575
 - `CIG_REC = N` (treatment_binary = 0): 3,531,269
+- Flag-aware complete-case all-births `Y`: 82,354
+- Flag-aware complete-case all-births `N`: 3,359,228
+- Flag-aware complete-case all-births excluded `Y`: 4,221
+- Flag-aware complete-case all-births excluded `N`: 172,041
+- Flag-aware complete-case singleton `Y`: 79,378
+- Flag-aware complete-case singleton `N`: 3,256,857
+- Flag-aware complete-case singleton excluded `Y`: 4,048
+- Flag-aware complete-case singleton excluded `N`: 166,299
 - Birth weight unit: grams
 - Valid birth weight minimum: 227
 - Valid birth weight maximum: 8160
 
-Covariate values were retained as extracted. No complete-case filtering or
-covariate recoding was performed in this step.
+The analysis cohort files apply the flag-aware complete-case rule for all
+primary covariates. Values must use recognized, non-unknown codes; reporting
+flags `F_MHISP`, `F_MEDUC`, `F_CIGS_0`, `F_M_HT`, `F_PWGT`, `F_RF_PDIAB`, and
+`F_RF_PHYPER` must equal `1`. CDC-imputed age, race, and sex values remain
+eligible; their imputation flags are retained for audit. Gestational age is not
+part of this primary eligibility rule.

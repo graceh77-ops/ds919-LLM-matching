@@ -25,10 +25,15 @@
 
 | Field | Position | Analysis role / coding note |
 |---|---:|---|
+| `MAGE_IMPFLG` | 73 | Mother's age imputed flag; blank not imputed, 1 imputed |
+| `MAGE_REPFLG` | 74 | Flag that reported mother's age was used; blank no, 1 yes |
 | `MAGER` | 75-76 | Mother's age in single years; review imputation/unknown values |
+| `MRACEIMP` | 111 | Mother's race imputation flag; blank not imputed, 1 or 2 imputed |
+| `F_MHISP` | 116 | Reporting flag for mother's Hispanic origin |
 | `MRACEHISP` | 117 | Mother's race/Hispanic-origin recode; 8 unknown/not stated |
 | `DMAR` | 120 | Mother's marital status |
 | `MEDUC` | 124 | Mother's education; 9 unknown |
+| `F_MEDUC` | 126 | Reporting flag for mother's education |
 | `PRIORLIVE` | 171-172 | Prior births now living; 99 unknown/not stated |
 | `PRIORDEAD` | 173-174 | Prior births now dead; 99 unknown/not stated |
 | `CIG_0` | 253-254 | Cigarettes/day before pregnancy; 98 means 98+, 99 unknown/not stated |
@@ -42,6 +47,7 @@
 | `F_CIGS_3` | 268 | Reporting flag for third-trimester smoking |
 | `CIG_REC` | 269 | Pregnancy smoking recode: Y yes, N no, U unknown/not stated |
 | `BMI_R` | 287 | Maternal BMI category; 9 unknown/not stated |
+| `F_M_HT` | 282 | Reporting flag for mother's height; CDC also directs use for BMI reporting |
 | `PWgt_R` | 292-294 | Pre-pregnancy weight recode; 999 unknown/not stated |
 | `F_PWGT` | 295 | Reporting flag for pre-pregnancy weight |
 | `RF_PDIAB` | 313 | Pre-pregnancy diabetes: Y yes, N no, U unknown/not stated |

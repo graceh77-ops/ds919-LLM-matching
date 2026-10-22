@@ -26,8 +26,19 @@ effect of maternal smoking during pregnancy on birth weight?
   lists edited birth weights from 227 through 8,165 grams.
 - For the primary cohort, additionally retain only `DPLURAL = 1`. Keep
   multiple births in the all-births sensitivity cohort.
-- Covariate missingness exclusions or recoding are not applied yet. Apply and
-  report those after the covariate set and missing-data rule are finalized.
+- Apply the flag-aware complete-case rule to both the singleton primary cohort
+  and all-births sensitivity cohort: retain records only when every primary
+  covariate has a recognized, non-unknown value and the reporting flags
+  `F_MHISP`, `F_MEDUC`, `F_CIGS_0`, `F_M_HT`, `F_PWGT`, `F_RF_PDIAB`, and
+  `F_RF_PHYPER` equal `1`.
+- Do not exclude records solely because age, race, or sex was CDC-imputed;
+  retain those values and report their imputation flags. Gestational-age
+  variables and flags do not determine primary cohort eligibility.
+- The flag-aware rule retained 3,336,235 of 3,506,582 singleton records
+  (95.14%) in the covariate missingness audit. The code-based complete-case
+  rule without reporting-flag requirements retained 3,344,587 (95.38%) and is
+  reported as an eligibility comparison only; the primary cohort uses the
+  flag-aware rule.
 - The cohort counts above are pre-covariate counts. The corresponding file
   paths and QC details are in [`../../results/full_data_qc_summary.md`](../../results/full_data_qc_summary.md).
 
@@ -87,6 +98,5 @@ effect of maternal smoking during pregnancy on birth weight?
 
 ## Decisions still to confirm
 
-- Confirm the covariate missing-data rule.
 - Confirm how gestational length will be used and reported in sensitivity analysis.
 - Confirm the matching algorithm and caliper after the data format is checked.

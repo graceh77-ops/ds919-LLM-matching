@@ -21,6 +21,31 @@ OUTCOME_COLUMN = "DBWT"
 DPLURAL_COLUMN = "DPLURAL"
 MISSING_OUTCOME_CODE = 9999
 
+# Values must be recognized, and these item-level reporting flags must confirm
+# that the source item was reported. Imputation flags for age, race, and sex do
+# not disqualify otherwise usable values.
+PRIMARY_COVARIATE_VALIDATORS = {
+    "MAGER": lambda value: value.isdigit() and 12 <= int(value) <= 50,
+    "MRACEHISP": lambda value: value in {"1", "2", "3", "4", "5", "6", "7"},
+    "MEDUC": lambda value: value in {"1", "2", "3", "4", "5", "6", "7", "8"},
+    "CIG0_R": lambda value: value in {"0", "1", "2", "3", "4", "5"},
+    "PRIORLIVE": lambda value: value.isdigit() and 0 <= int(value) <= 30,
+    "PRIORDEAD": lambda value: value.isdigit() and 0 <= int(value) <= 30,
+    "BMI_R": lambda value: value in {"1", "2", "3", "4", "5", "6"},
+    "RF_PDIAB": lambda value: value in {"Y", "N"},
+    "RF_PHYPE": lambda value: value in {"Y", "N"},
+    "SEX": lambda value: value in {"M", "F"},
+}
+REQUIRED_REPORTING_FLAGS = (
+    "F_MHISP",
+    "F_MEDUC",
+    "F_CIGS_0",
+    "F_M_HT",
+    "F_PWGT",
+    "F_RF_PDIAB",
+    "F_RF_PHYPER",
+)
+
 
 def main():
     if not INPUT_CSV.exists():
@@ -44,6 +69,12 @@ def main():
     valid_birthweights = []
     eligible_singletons = 0
     excluded_non_singleton = 0
+    complete_case_rows = 0
+    excluded_covariate_rows = 0
+    complete_case_treatment_values = Counter()
+    incomplete_case_treatment_values = Counter()
+    singleton_complete_case_treatment_values = Counter()
+    singleton_incomplete_case_treatment_values = Counter()
 
     with INPUT_CSV.open("r", encoding="utf-8-sig", newline="") as source:
         reader = csv.DictReader(source)
@@ -51,7 +82,11 @@ def main():
         if reader.fieldnames is None:
             raise ValueError("The input CSV has no header row.")
 
-        required_columns = {TREATMENT_COLUMN, OUTCOME_COLUMN, DPLURAL_COLUMN}
+        required_columns = (
+            {TREATMENT_COLUMN, OUTCOME_COLUMN, DPLURAL_COLUMN}
+            | set(PRIMARY_COVARIATE_VALIDATORS)
+            | set(REQUIRED_REPORTING_FLAGS)
+        )
         missing_columns = required_columns - set(reader.fieldnames)
         if missing_columns:
             raise ValueError(
@@ -103,12 +138,38 @@ def main():
 
                 row["treatment_binary"] = "1" if treatment == "Y" else "0"
                 row["birthweight_g"] = str(birthweight)
-                sensitivity_writer.writerow(row)
-                if (row.get(DPLURAL_COLUMN) or "").strip() == "1":
-                    writer.writerow(row)
+                covariates_valid = all(
+                    validator((row.get(field) or "").strip().upper())
+                    for field, validator in PRIMARY_COVARIATE_VALIDATORS.items()
+                )
+                flags_reported = all(
+                    (row.get(flag) or "").strip() == "1"
+                    for flag in REQUIRED_REPORTING_FLAGS
+                )
+                complete_case = covariates_valid and flags_reported
+                is_singleton = (row.get(DPLURAL_COLUMN) or "").strip() == "1"
+                if complete_case:
+                    complete_case_rows += 1
+                    complete_case_treatment_values[treatment] += 1
+                    if is_singleton:
+                        singleton_complete_case_treatment_values[treatment] += 1
+                else:
+                    excluded_covariate_rows += 1
+                    incomplete_case_treatment_values[treatment] += 1
+                    if is_singleton:
+                        singleton_incomplete_case_treatment_values[treatment] += 1
+
+                # Apply the same covariate rule to primary and sensitivity
+                # populations so estimates use comparable eligibility rules.
+                if is_singleton:
                     eligible_singletons += 1
                 else:
                     excluded_non_singleton += 1
+
+                if complete_case:
+                    sensitivity_writer.writerow(row)
+                    if (row.get(DPLURAL_COLUMN) or "").strip() == "1":
+                        writer.writerow(row)
 
                 included_treatment_values[treatment] += 1
                 valid_birthweights.append(birthweight)
@@ -130,9 +191,15 @@ def main():
 - Primary analysis cohort (singleton births): `{OUTPUT_CSV.relative_to(PROJECT_ROOT)}`
 - Sensitivity cohort (all eligible births): `{SENSITIVITY_OUTPUT_CSV.relative_to(PROJECT_ROOT)}`
 - Input rows: {input_rows:,}
-- All-births cohort rows: {included_rows:,}
-- Singleton primary cohort rows (`DPLURAL = 1`): {eligible_singletons:,}
+- All-births eligible rows before covariate filtering: {included_rows:,}
+- Singleton primary eligible rows before covariate filtering (`DPLURAL = 1`): {eligible_singletons:,}
 - Eligible non-singleton births excluded from primary cohort: {excluded_non_singleton:,}
+- All-births records meeting the flag-aware covariate rule: {complete_case_rows:,}
+- All-births records excluded for incomplete/unknown covariates or non-reporting flags: {excluded_covariate_rows:,}
+- Singleton records meeting the flag-aware covariate rule: {sum(singleton_complete_case_treatment_values.values()):,}
+- Singleton records excluded by the flag-aware covariate rule: {sum(singleton_incomplete_case_treatment_values.values()):,}
+- Final all-births sensitivity file rows: {complete_case_rows:,}
+- Final singleton primary file rows: {sum(singleton_complete_case_treatment_values.values()):,}
 
 ## Treatment values in the input
 
@@ -150,12 +217,24 @@ def main():
 
 - `CIG_REC = Y` (treatment_binary = 1): {included_treatment_values["Y"]:,}
 - `CIG_REC = N` (treatment_binary = 0): {included_treatment_values["N"]:,}
+- Flag-aware complete-case all-births `Y`: {complete_case_treatment_values["Y"]:,}
+- Flag-aware complete-case all-births `N`: {complete_case_treatment_values["N"]:,}
+- Flag-aware complete-case all-births excluded `Y`: {incomplete_case_treatment_values["Y"]:,}
+- Flag-aware complete-case all-births excluded `N`: {incomplete_case_treatment_values["N"]:,}
+- Flag-aware complete-case singleton `Y`: {singleton_complete_case_treatment_values["Y"]:,}
+- Flag-aware complete-case singleton `N`: {singleton_complete_case_treatment_values["N"]:,}
+- Flag-aware complete-case singleton excluded `Y`: {singleton_incomplete_case_treatment_values["Y"]:,}
+- Flag-aware complete-case singleton excluded `N`: {singleton_incomplete_case_treatment_values["N"]:,}
 - Birth weight unit: grams
 - Valid birth weight minimum: {min_birthweight}
 - Valid birth weight maximum: {max_birthweight}
 
-Covariate values were retained as extracted. No complete-case filtering or
-covariate recoding was performed in this step.
+The analysis cohort files apply the flag-aware complete-case rule for all
+primary covariates. Values must use recognized, non-unknown codes; reporting
+flags `F_MHISP`, `F_MEDUC`, `F_CIGS_0`, `F_M_HT`, `F_PWGT`, `F_RF_PDIAB`, and
+`F_RF_PHYPER` must equal `1`. CDC-imputed age, race, and sex values remain
+eligible; their imputation flags are retained for audit. Gestational age is not
+part of this primary eligibility rule.
 """
 
     SUMMARY_MD.write_text(summary, encoding="utf-8")

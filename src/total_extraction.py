@@ -13,9 +13,14 @@ expected_record_length = 1345
 # Positions are 1-based and inclusive, as listed in the CDC User Guide.
 # Python slices start at 0 and exclude the end position.
 fields = {
+    "MAGE_IMPFLG": (73, 73),
+    "MAGE_REPFLG": (74, 74),
     "MAGER": (75, 76),
+    "MRACEIMP": (111, 111),
+    "F_MHISP": (116, 116),
     "MRACEHISP": (117, 117),
     "DMAR": (120, 120),
+    "F_MEDUC": (126, 126),
     "MEDUC": (124, 124),
     "PRIORLIVE": (171, 172),
     "PRIORDEAD": (173, 174),
@@ -30,6 +35,7 @@ fields = {
     "F_CIGS_3": (268, 268),
     "CIG_REC": (269, 269),
     "BMI_R": (287, 287),
+    "F_M_HT": (282, 282),
     "PWgt_R": (292, 294),
     "F_PWGT": (295, 295),
     "RF_PDIAB": (313, 313),
