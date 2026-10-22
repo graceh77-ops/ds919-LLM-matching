@@ -55,14 +55,12 @@ smoking, mediate its effect, or reflect care decisions.
 
 ## Agreed primary set and planned sensitivity variables
 
-The primary set below reflects the current study decision. Missing-code,
-reporting, and missing-data handling still need to be specified in the next
-step.
+The primary set below reflects the current study decision.
 
 | Proposed role | Fields | Rationale / handling |
 |---|---|---|
 | Primary set | `MAGER`, `MRACEHISP`, `MEDUC` | Maternal age and social-context measures may relate to both smoking and birth weight. Treat race/Hispanic-origin as social context, not biology. |
-| Primary set | `CIG0_R` | Pre-pregnancy smoking is a strong baseline predictor of smoking during pregnancy; CDC categories are 0 (nonsmoker), 1-5 (intensity groups), and 6 (unknown/not stated). |
+| Primary set | `CIG0_R` | Pre-pregnancy smoking is a strong baseline predictor of smoking during pregnancy and may affect birthweight of child; CDC categories are 0 (nonsmoker), 1-5 (intensity groups), and 6 (unknown/not stated). |
 | Primary set | `PRIORLIVE`, `PRIORDEAD` | Prior birth history precedes the index birth and may relate to both smoking patterns and birth outcomes. |
 | Primary set | `BMI_R` | CDC's BMI measure represents pre-pregnancy BMI; use the recoded form available in this extract. Do not include `PWgt_R` alongside it in the primary set. |
 | Primary set | `RF_PDIAB`, `RF_PHYPE` | Pre-pregnancy diabetes and hypertension are baseline health characteristics; use reporting flags for data-quality review, not as matching variables. |
@@ -89,6 +87,37 @@ describe how the gestational estimate was constructed.
 - Keep the primary representation choices explicit: `CIG0_R` over `CIG_0`,
   `BMI_R` over `PWgt_R` or `M_Ht_In`, and `PRIORLIVE` plus `PRIORDEAD` instead
   of `LBO_REC`.
+- For matching, treat `MEDUC` as a categorical variable grouped into four
+  levels: codes `1-2`, `3-4`, `5-6`, and `7-8`. Do not encode these groups as
+  numeric scores in the primary representation.
+- Use `CIG0_R` as a categorical pre-pregnancy smoking measure. Keep code `0`
+  as nonsmoker; group codes `1-2` as light smoking (1-10 cigarettes/day), code
+  `3` as moderate smoking (11-20 cigarettes/day), and codes `4-5` as heavy
+  smoking (21+ cigarettes/day). Do not treat the grouped categories as equally
+  spaced numeric values.
+- Recommended first-pass matching representation and scaling:
+  - Treat `MRACEHISP`, grouped `MEDUC`, grouped `CIG0_R`, and `BMI_R` as
+    categorical blocks, not numeric scores. Encode `RF_PDIAB`, `RF_PHYPE`, and
+    `SEX` as binary indicators.
+  - Treat `MAGER`, `PRIORLIVE`, and `PRIORDEAD` as numeric in the first pass.
+    Center and divide by the standard deviation calculated from the 99%
+    reference portion of each split; apply those same values to the 1% test
+    portion. Keep prior-birth counts on their original count scale initially;
+    consider a nonlinear or grouped version only as a documented sensitivity
+    if diagnostics show the linear count distance is unsuitable.
+  - Keep all transformations outcome-blind. Ask the LLM for one weight per
+    original covariate, not one weight per indicator column. Final contrast
+    coding and categorical-block normalization must be specified with the
+    matching distance so multi-level fields do not gain influence just by
+    expanding into more columns.
+  - Apply each covariate's weight to its full encoded block. In the equal-weight
+    baseline, give each of the 10 original covariates equal field-level weight;
+    in the LLM method, use one nonnegative LLM-assigned weight per original
+    covariate and rescale the weights to have mean 1. Normalize categorical
+    blocks using the 99% reference portion so their number of levels does not
+    itself increase their total influence; use the same coding and scales for
+    the 1% test portion. The exact full-rank contrast matrix and normalization
+    formula will be fixed with the matching-distance specification.
 - Decide whether to add `DMAR` or other optional candidates in a sensitivity
   analysis after reviewing timing and missingness.
 - Exclude reporting flags from matching; use them to interpret item reporting.
