@@ -12,16 +12,16 @@ Assign a relative matching-priority score to each of the ten covariates listed b
 
 **Covariates:**
 
-- `MAGER`: Mother's age in years; a pre-pregnancy characteristic that may relate to smoking during pregnancy and birth weight.
+- `MAGER`: Mother's age in years.
 - `MRACEHISP`: Mother's race and Hispanic-origin recode; a social-context measure that may relate to exposure and outcome through structural and social factors, not a biological cause.
-- `MEDUC`: Mother's education; generally established before pregnancy and may relate to smoking and social conditions affecting birth weight.
-- `CIG0_R`: Mother's cigarette use before pregnancy; prior smoking behavior may predict smoking during pregnancy and may relate to birth weight.
-- `PRIORLIVE`: Number of the mother's previous live births now living; prior pregnancy history.
-- `PRIORDEAD`: Number of the mother's previous live births now dead; prior pregnancy history.
-- `BMI_R`: Mother's recoded pre-pregnancy body mass index; a baseline body-size measure.
-- `RF_PDIAB`: Whether the mother had pre-pregnancy diabetes; a baseline health characteristic.
-- `RF_PHYPE`: Whether the mother had pre-pregnancy hypertension; a baseline health characteristic.
-- `SEX`: Infant sex; a strong prognostic covariate for birth weight, but not an established confounder in this study.
+- `MEDUC`: Mother's education; generally established before pregnancy.
+- `CIG0_R`: Mother's cigarette use before pregnancy.
+- `PRIORLIVE`: Number of the mother's previous live births now living.
+- `PRIORDEAD`: Number of the mother's previous live births now dead.
+- `BMI_R`: Mother's recoded pre-pregnancy body mass index.
+- `RF_PDIAB`: Whether the mother had pre-pregnancy diabetes.
+- `RF_PHYPE`: Whether the mother had pre-pregnancy hypertension.
+- `SEX`: Infant sex.
 
 Return one **integer score from 0 to 10** for each covariate. A score of 0 means lowest relative priority for matching; 10 means highest relative priority. Scores are relative and do not need to sum to 1.
 
