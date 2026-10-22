@@ -68,6 +68,21 @@ effect of maternal smoking during pregnancy on birth weight?
   for every birth or every pregnant person.
 - Report how many treated records were not matched.
 
+## Initial matching setup
+
+- Start with 1:1 nearest-neighbor matching with replacement and no caliper.
+- Use the same ratio, replacement rule, and no-caliper rule across all
+  compared methods; the distance definition is method-specific.
+- With replacement, a nonsmoking birth may serve as a match for multiple
+  treated births. Report the number of unique controls used and the distribution
+  of control reuse.
+- With no caliper, treated-birth retention will generally be 100% when at least
+  one eligible control is available. Therefore, assess match quality with
+  covariate balance, overlap, and the distribution of matched distances, not
+  retention alone. A caliper can be evaluated later as a sensitivity analysis.
+- The conventional estimator used to produce the 99% reference ATT remains to
+  be selected and documented.
+
 ## Covariates
 
 - Primary set: `MAGER`, `MRACEHISP`, `MEDUC`, `CIG0_R`,
@@ -99,4 +114,6 @@ effect of maternal smoking during pregnancy on birth weight?
 ## Decisions still to confirm
 
 - Confirm how gestational length will be used and reported in sensitivity analysis.
-- Confirm the matching algorithm and caliper after the data format is checked.
+- Select the conventional estimator for the 99% reference ATT.
+- Specify the exact distance implementation, including categorical contrast
+  coding and block normalization.
