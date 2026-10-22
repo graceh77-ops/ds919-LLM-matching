@@ -100,7 +100,7 @@ split assignments.
 
 Apply LLM-assigned covariate weights using generalized Mahalanobis matching.
 The LLM provides the weights only; preprocessing and matching rules are
-pre-specified outside the LLM.
+specified outside the LLM.
 
 ### Primary conventional comparisons
 
@@ -112,7 +112,7 @@ pre-specified outside the LLM.
 ### Additional comparators
 
 - **Propensity-score matching:** estimate treatment propensity from the
-  pre-specified covariates and apply a fixed matching rule.
+  covariates and apply a fixed matching rule.
 - **Genetic matching:** use a genetic-matching procedure to select distance weights and apply the generalized Mahalanobis distance metric.
 
 Specify the matching algorithm, distance calculation, covariate preprocessing
