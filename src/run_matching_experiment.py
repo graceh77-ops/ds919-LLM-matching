@@ -76,6 +76,21 @@ def _stratified_split(
     return reference_indices, test_indices
 
 
+def _transform_distance_coordinates(
+    data: pd.DataFrame,
+    transform: Any,
+    factor: np.ndarray,
+    chunk_size: int = 100_000,
+) -> np.ndarray:
+    """Transform and project rows in chunks to bound peak feature-matrix memory."""
+    coordinates = np.empty((len(data), factor.shape[1]), dtype=np.float64)
+    for start in range(0, len(data), chunk_size):
+        stop = min(start + chunk_size, len(data))
+        features = transform.transform(data.iloc[start:stop])
+        coordinates[start:stop] = features @ factor
+    return coordinates
+
+
 def _match_one_method(
     reference: pd.DataFrame,
     test: pd.DataFrame,
@@ -86,7 +101,6 @@ def _match_one_method(
     reference_att: float | None = None,
     reference_att_se: float | None = None,
     test_coordinates: tuple[np.ndarray, np.ndarray] | None = None,
-    reference_features: np.ndarray | None = None,
     test_features: np.ndarray | None = None,
 ) -> dict[str, Any]:
     """Estimate ATT in reference and test portions using one fixed distance."""
@@ -99,18 +113,8 @@ def _match_one_method(
     if test_treated.empty or test_controls.empty:
         raise ValueError("Test portion must contain treated and control records.")
 
-    reference_treated_mask = reference["treatment_binary"].to_numpy() == 1
-    reference_control_mask = ~reference_treated_mask
     test_treated_mask = test["treatment_binary"].to_numpy() == 1
     test_control_mask = ~test_treated_mask
-    if reference_features is None:
-        reference_treated_features = transform.transform(reference_treated)
-        reference_control_features = transform.transform(reference_controls)
-    else:
-        if reference_features.shape != (len(reference), len(transform.feature_names)):
-            raise ValueError("Cached reference features do not align with reference rows.")
-        reference_treated_features = reference_features[reference_treated_mask]
-        reference_control_features = reference_features[reference_control_mask]
     if test_features is None:
         test_treated_features = transform.transform(test_treated)
         test_control_features = transform.transform(test_controls)
@@ -129,8 +133,12 @@ def _match_one_method(
     reference_unique_controls: int | None = None
     reference_max_reuse: int | None = None
     if reference_att is None:
-        reference_control_coordinates = reference_control_features @ factor
-        reference_treated_coordinates = reference_treated_features @ factor
+        reference_control_coordinates = _transform_distance_coordinates(
+            reference_controls, transform, factor
+        )
+        reference_treated_coordinates = _transform_distance_coordinates(
+            reference_treated, transform, factor
+        )
         reference_match = nearest_neighbor_with_replacement(
             reference_treated_coordinates,
             reference_control_coordinates,
@@ -203,7 +211,6 @@ def _fit_reference_propensity(
     reference: pd.DataFrame,
     transform: Any,
     chunk_size: int = 100_000,
-    reference_features: np.ndarray | None = None,
 ) -> np.ndarray:
     """Fit an unpenalized logistic propensity model in memory-bounded batches.
 
@@ -219,11 +226,6 @@ def _fit_reference_propensity(
     initial = np.zeros(len(transform.feature_names) + 1, dtype=np.float64)
     initial[0] = np.log(treated_fraction / (1.0 - treated_fraction))
     row_count = len(reference)
-    if reference_features is not None and reference_features.shape != (
-        row_count,
-        len(transform.feature_names),
-    ):
-        raise ValueError("Cached reference features do not align with reference rows.")
 
     def objective_and_gradient(coefficients: np.ndarray) -> tuple[float, np.ndarray]:
         intercept = coefficients[0]
@@ -232,11 +234,8 @@ def _fit_reference_propensity(
         total_gradient = np.zeros_like(coefficients)
         for start in range(0, row_count, chunk_size):
             stop = min(start + chunk_size, row_count)
-            if reference_features is None:
-                rows = reference.iloc[start:stop]
-                features = transform.transform(rows)
-            else:
-                features = reference_features[start:stop]
+            rows = reference.iloc[start:stop]
+            features = transform.transform(rows)
             y = treatment[start:stop]
             linear_predictor = intercept + features @ feature_coefficients
             total_loss += np.logaddexp(0.0, linear_predictor).sum() - np.dot(
@@ -372,7 +371,6 @@ def run_experiment(
         reference = data.iloc[reference_indices]
         test = data.iloc[test_indices]
         transform = fit_natality_transform(reference)
-        reference_features = transform.transform(reference)
         test_features = transform.transform(test)
         identity_weights = transform.diagonal_field_weights()
 
@@ -383,16 +381,13 @@ def run_experiment(
             identity_weights,
             "identity_generalized_mahalanobis",
             split_number,
-            reference_features=reference_features,
             test_features=test_features,
         )
         identity["pilot_rows"] = pilot_rows
         identity["test_fraction"] = test_fraction
         result_rows.append(identity)
 
-        propensity_coefficients = _fit_reference_propensity(
-            reference, transform, reference_features=reference_features
-        )
+        propensity_coefficients = _fit_reference_propensity(reference, transform)
         propensity_coordinates = _test_propensity_coordinates(
             test, transform, propensity_coefficients, test_features=test_features
         )
@@ -406,7 +401,6 @@ def run_experiment(
             reference_att=identity["reference_att_g"],
             reference_att_se=identity["reference_att_cluster_se_g"],
             test_coordinates=propensity_coordinates,
-            reference_features=reference_features,
             test_features=test_features,
         )
         psm["pilot_rows"] = pilot_rows
@@ -424,7 +418,6 @@ def run_experiment(
                 split_number,
                 reference_att=identity["reference_att_g"],
                 reference_att_se=identity["reference_att_cluster_se_g"],
-                reference_features=reference_features,
                 test_features=test_features,
             )
             llm["pilot_rows"] = pilot_rows
@@ -441,7 +434,6 @@ def run_experiment(
                 split_number,
                 reference_att=identity["reference_att_g"],
                 reference_att_se=identity["reference_att_cluster_se_g"],
-                reference_features=reference_features,
                 test_features=test_features,
             )
             sensitivity["pilot_rows"] = pilot_rows
