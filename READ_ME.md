@@ -1,87 +1,105 @@
-﻿# Evaluating LLM-Assisted Matching
+# Evaluating LLM-Assisted Matching
 
-## Project Overview
+## Project overview
 
-This project evaluates whether an LLM-assisted matching approach can improve
-causal matching in observational data.
+This project evaluates whether LLM-assisted covariate weight decisions improves
+matching quality and treatment-effect estimation compared with conventional
+matching methods. The current application is maternal smoking during pregnancy
+and infant birth weight using the 2024 CDC Natality Public Use File.
 
-The method under study uses an LLM to assess the relative importance of
-pre-specified covariates and inform the matching process. Its performance will
-be compared with conventional matching approaches. Maternal smoking during
-pregnancy and infant birth weight in the 2024 CDC Natality Public Use File serve
-as the real-data case study.
+The project evaluates matching procedures. It does not aim to establish a
+definitive causal effect of maternal smoking on birth weight.
 
-The primary goal is to evaluate the matching method, not to establish that
-maternal smoking causes a particular change in birth weight.
+## Research question
 
-## Main Research Question
+Does LLM-generated covariate weighting improve matching performance compared 
+with conventional approaches?
 
-How does LLM-assisted covariate prioritization or weighting affect matching
-quality and causal effect estimates compared with conventional matching
-approaches?
+## Current evaluation plan (Pseudo-ground truth construction)
 
-The exact LLM role, matching algorithm, comparison methods, and target
-estimand will be specified in the llm_matching_protocol before the final
-evaluation.
+The current study will use the eligible 2024 singleton-birth Natality cohort.
+For each of `R` repeated, outcome-blind, treatment-stratified random splits,
+use 99% of the eligible cohort as the reference sample and 1% as the test
+sample. A conventional estimator, to be specified before the final comparison,
+will estimate the reference ATT in the 99% sample. Each matching method will
+estimate the ATT in the 1% test sample using the same treatment, outcome,
+covariates, eligibility rules, and estimand.
 
+For method `m` and split `r`, compare its test-sample estimate with the
+reference estimate:
 
-## Evaluation
+`Reference error_(m,r) = ATT_test_(m,r) - ATT_reference_r`
 
-### Primary comparison: pseudo-ground-truth reference error
+Report the mean squared reference error and its square root (RMSE) across the
+`R` splits. These quantify agreement with the selected conventional reference
+procedure; they are **not** error against a known true causal effect. The
+reference may itself retain bias or residual confounding. Also report balance,
+overlap, treated-birth retention, and ATT uncertainty so the reference error
+is interpreted alongside matching diagnostics.
 
-For the Natality case study, we will evaluate whether matching methods applied to a held-out sample reproduce a pre-specified reference effect estimate from a larger sample.
+The 2024 cohort currently contains about 80,000 treated singleton births
+before matching. A 1% test split therefore has only about 800 treated births
+before matching, and fewer may be retained. This may make test estimates
+variable. Later, the study may add 2023, 2022, and other years to increase the
+available sample. Any multi-year analysis will require harmonized fields and a
+documented decision about year effects and the target population. The current
+stage is 2024 only.
 
-For each of R repeated, outcome-blind, treatment-stratified random splits, we will use 99% of the eligible singleton cohort as the reference sample and 1% as the test sample. A pre-specified conventional estimator will produce the reference ATT in the 99% sample. Each candidate method will estimate the ATT in the 1% test sample using the same treatment definition, outcome, covariates, estimand, and eligibility rules.
+## LLM workflow
 
-For method m, the reference-relative mean squared error will be:
+Apply the same Natality cohort, split design, covariates, estimand, and
+matching rules through three stages:
 
-MSE_m = (1 / R) * sum_r (ATT_test,m,r - ATT_reference,r)^2
+1. **Manual chat-interface matching:** obtain covariate priorities or weights
+   through a chat interface without using an API.
+2. **DeepSeek API:** implement the same LLM weighting task using DeepSeek.
+3. **Advanced API:** repeat the task with the more advanced API/model to be
+   selected after discussion.
 
-We will also report the root mean squared error (RMSE) in grams. Lower values indicate closer agreement with the reference estimate across repeated splits.
+At every stage, provide covariate names, definitions, coding, and relevant
+pre-treatment rationale. Do not provide outcome values when obtaining LLM
+weights. The LLM supplies covariate weights only; it does not choose the
+cohort, outcome, estimand, split, or matching algorithm. Save the model or
+interface, prompt, settings, returned structured weights, and any retries.
 
-This is a pseudo-ground-truth evaluation, not an evaluation against the known true causal effect. The reference estimate may retain residual confounding, and the MSE measures agreement with that reference estimator. The reference estimator will be specified before comparing methods; if propensity-score matching is used as the reference, the results will be interpreted as agreement with that approach.
+## Matching methods
 
-### Supporting diagnostics
+Compare the LLM-weighted method with:
 
-For each method, we will report:
+- Identity-matrix unweighted generalized Mahalanobis matching.
+- PCA-based matching.
+- Propensity-score matching.
+- Genetic matching.
 
-- Covariate balance before and after matching, including standardized mean differences (SMDs).
-- Propensity-score overlap or covariate-space matchability, as appropriate to the method.
-- Number and proportion of treated births retained or matched.
-- Estimated ATT in grams and its uncertainty.
-- Sensitivity of balance, retention, and ATT estimates to matching and covariate-weight choices.
+The matching algorithm, distance calculation, preprocessing and scaling,
+caliper, replacement rule, and conventional reference estimator remain to be
+specified before the final comparison. Apply the same rules to all methods
+where applicable.
 
-## Real-Data Case Study
+## Data and study variables
 
-The case study uses the 2024 CDC Natality Public Use File.
+- **Treatment:** `CIG_REC`; `Y` means reported smoking during pregnancy and
+  `N` means no reported smoking. Unknown status is excluded.
+- **Outcome:** `DBWT`, birth weight in grams. The not-stated code `9999` is
+  excluded.
+- **Primary covariates and eligibility:** see
+  [`docs/maternal_smoking_birthweight/analysis_protocol.md`](docs/maternal_smoking_birthweight/analysis_protocol.md)
+  and the [covariate review](docs/maternal_smoking_birthweight/covariate_review.md).
+- **Primary cohort:** eligible singleton births under the documented
+  flag-aware complete-case rule.
+- **Proposed estimand:** ATT for treated births that can be matched to
+  comparable nonsmoking births; report unmatched treated births.
 
-- **Treatment:** `CIG_REC`
-  - `Y`: reported cigarette smoking during pregnancy
-  - `N`: no reported cigarette smoking during pregnancy
-  - `U`: unknown treatment status
-- **Outcome:** `DBWT`
-  - Birth weight in grams
-  - `9999`: not-stated code
-- **Candidate covariates:** documented in
-  [`docs/maternal_smoking_birthweight/covariate_review.md']
+ACIC 2016 is a possible known-ground-truth benchmark, but it is not part of the
+current Natality study. Discuss with the professor before adding it.
 
-Records with unknown treatment status or missing birth weight are excluded
-from the primary analysis cohort. Their counts are recorded in the
-data-quality summary. Candidate covariates and their missing values are
-handled according to the analysis protocol.
+## Documentation and data
 
-## Data
-
-The fixed-width source file is stored locally at:
-
-```text
-data/raw/2024/Nat2024us/Nat2024PublicUS.c20250512.r20250708.txt
-```
-
-## Documentation
-
-- [`docs/llm_matching/`](docs/llm_matching/) contains the general LLM matching
-  evaluation protocol.
+- [`docs/llm_matching/`](docs/llm_matching/) contains the general evaluation
+  protocol.
 - [`docs/maternal_smoking_birthweight/`](docs/maternal_smoking_birthweight/)
-  contains the Natality case-study plan, analysis protocol, extraction details,
-  data dictionary, and covariate review.
+  contains the Natality case-study protocol and data documentation.
+- The fixed-width 2024 source file is stored locally at
+  `data/raw/2024/Nat2024us/Nat2024PublicUS.c20250512.r20250708.txt`.
+- Raw and processed data are local project inputs and must not be committed to
+  Git.
