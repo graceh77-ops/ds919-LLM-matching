@@ -42,6 +42,14 @@ causal effect. The reference estimate can be biased or retain residual
 confounding; therefore, the results show agreement with the chosen reference
 procedure and do not establish causal accuracy.
 
+These repeated splits are **within-cohort resampling**: every split is drawn
+from the same eligible 2024 cohort, and records may appear in the test sample
+in one split and the reference sample in another. They are not independent
+validation cohorts or independent replications. Summaries across splits
+describe sensitivity to the random partition of this cohort; they do not
+provide external validation or make the source births independent across
+repetitions.
+
 The 2024 cohort has about 80,000 treated singleton births before matching, so
 a 1% test sample contains about 800 treated births before matching and may
 contain fewer after matching. Test-sample estimates may consequently be noisy.
@@ -51,9 +59,11 @@ The present work remains 2024 only. Before pooling years, harmonize variables
 and eligibility rules and document how calendar year affects the target
 population and analysis.
 
-The number of repetitions `R` and the seed value are not yet finalized.
-Specify them before comparing final results. The reference estimator and
-primary matching settings are defined in the Natality analysis protocol.
+The historical runs used one split and seed `20261022`. A final repetition
+count and seed procedure have not been selected. Record and freeze them before
+the next comparison; do not treat the historical one-split results as repeated
+validation. See the [current experiment configuration](current_experiment_configuration.md)
+for the recorded historical settings and decisions still open.
 
 ## Staged LLM workflow
 
@@ -110,6 +120,15 @@ specified outside the LLM.
   reference-error calculation. Report balance using the same encoded columns
   as the other methods. This is the initial PSM specification; do not tune it
   using test outcomes.
+
+  **Specification history:** PSM as a comparator family was already listed
+  before its implementation. The detailed implementation above was finalized
+  on 2026-10-22, after the first full-cohort identity/LLM comparison had been
+  reviewed and before PSM results were generated. The exact time was not
+  recorded. Treat PSM results from this project phase as an exploratory
+  comparator informed by a later implementation refinement, not as a wholly
+  prespecified primary comparison. Its settings are now frozen for the
+  current configuration; do not tune them against test outcomes.
 - **Genetic matching:** use a genetic-matching procedure to select distance weights and apply the generalized Mahalanobis distance metric.
 
 The analysis protocol specifies the primary matching algorithm, distance,
