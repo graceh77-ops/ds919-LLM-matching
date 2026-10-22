@@ -97,8 +97,15 @@ specified outside the LLM.
 
 ### Additional comparators
 
-- **Propensity-score matching:** estimate treatment propensity from the
-  covariates and apply a fixed matching rule.
+- **Propensity-score matching:** fit an unpenalized logistic regression for
+  treatment using the same 23 encoded covariate columns, fitted preprocessing,
+  and the 99% reference sample in each split. Apply the fitted model to the 1%
+  test sample and match on the logit propensity score using 1:1 nearest-neighbor
+  matching with replacement and no caliper. Resolve ties by the smallest
+  source record number. Use the identity method's reference ATT for the
+  reference-error calculation. Report balance using the same encoded columns
+  as the other methods. This is the initial PSM specification; do not tune it
+  using test outcomes.
 - **Genetic matching:** use a genetic-matching procedure to select distance weights and apply the generalized Mahalanobis distance metric.
 
 The analysis protocol specifies the primary matching algorithm, distance,

@@ -10,6 +10,8 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from scipy.optimize import minimize
+from scipy.special import expit
 
 from matching_distance import (
     FIELD_ORDER,
@@ -83,6 +85,7 @@ def _match_one_method(
     split_number: int,
     reference_att: float | None = None,
     reference_att_se: float | None = None,
+    test_coordinates: tuple[np.ndarray, np.ndarray] | None = None,
 ) -> dict[str, Any]:
     """Estimate ATT in reference and test portions using one fixed distance."""
     reference_treated = reference.loc[reference["treatment_binary"] == 1]
@@ -94,7 +97,11 @@ def _match_one_method(
     if test_treated.empty or test_controls.empty:
         raise ValueError("Test portion must contain treated and control records.")
 
-    factor = transform.distance_factor(diagonal_weights)
+    factor = (
+        transform.distance_factor(diagonal_weights)
+        if test_coordinates is None or reference_att is None
+        else None
+    )
 
     reference_unique_controls: int | None = None
     reference_max_reuse: int | None = None
@@ -124,8 +131,11 @@ def _match_one_method(
 
     test_control_features = transform.transform(test_controls)
     test_treated_features = transform.transform(test_treated)
-    test_control_coordinates = test_control_features @ factor
-    test_treated_coordinates = test_treated_features @ factor
+    if test_coordinates is None:
+        test_control_coordinates = test_control_features @ factor
+        test_treated_coordinates = test_treated_features @ factor
+    else:
+        test_treated_coordinates, test_control_coordinates = test_coordinates
     test_match = nearest_neighbor_with_replacement(
         test_treated_coordinates,
         test_control_coordinates,
@@ -166,6 +176,72 @@ def _match_one_method(
         result[f"smd_before_{feature}"] = float(before)
         result[f"smd_after_{feature}"] = float(after)
     return result
+
+
+def _fit_reference_propensity(
+    reference: pd.DataFrame,
+    transform: Any,
+    chunk_size: int = 100_000,
+) -> np.ndarray:
+    """Fit an unpenalized logistic propensity model in memory-bounded batches.
+
+    Returns the coefficients for an intercept followed by the shared encoded
+    covariate columns. The fitting objective and gradient are accumulated over
+    chunks so the full reference design matrix need not remain in memory.
+    """
+    treatment = reference["treatment_binary"].to_numpy(dtype=np.float64)
+    treated_fraction = float(treatment.mean())
+    if not 0.0 < treated_fraction < 1.0:
+        raise ValueError("Reference sample must contain both treatment groups for PSM.")
+
+    initial = np.zeros(len(transform.feature_names) + 1, dtype=np.float64)
+    initial[0] = np.log(treated_fraction / (1.0 - treated_fraction))
+    row_count = len(reference)
+
+    def objective_and_gradient(coefficients: np.ndarray) -> tuple[float, np.ndarray]:
+        intercept = coefficients[0]
+        feature_coefficients = coefficients[1:]
+        total_loss = 0.0
+        total_gradient = np.zeros_like(coefficients)
+        for start in range(0, row_count, chunk_size):
+            stop = min(start + chunk_size, row_count)
+            rows = reference.iloc[start:stop]
+            features = transform.transform(rows)
+            y = treatment[start:stop]
+            linear_predictor = intercept + features @ feature_coefficients
+            total_loss += np.logaddexp(0.0, linear_predictor).sum() - np.dot(
+                y, linear_predictor
+            )
+            residual = expit(linear_predictor) - y
+            total_gradient[0] += residual.sum()
+            total_gradient[1:] += features.T @ residual
+        return total_loss / row_count, total_gradient / row_count
+
+    fit = minimize(
+        objective_and_gradient,
+        initial,
+        method="L-BFGS-B",
+        jac=True,
+        options={"maxiter": 100, "ftol": 1e-10},
+    )
+    if not fit.success:
+        raise RuntimeError(f"Reference propensity model did not converge: {fit.message}")
+    return np.asarray(fit.x, dtype=np.float64)
+
+
+def _test_propensity_coordinates(
+    test: pd.DataFrame,
+    transform: Any,
+    coefficients: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return 1D logit-propensity coordinates for treated and control test rows."""
+    test_treated = test.loc[test["treatment_binary"] == 1]
+    test_controls = test.loc[test["treatment_binary"] == 0]
+    treated_features = transform.transform(test_treated)
+    control_features = transform.transform(test_controls)
+    treated_scores = coefficients[0] + treated_features @ coefficients[1:]
+    control_scores = coefficients[0] + control_features @ coefficients[1:]
+    return treated_scores[:, None], control_scores[:, None]
 
 
 def _absolute_smds(treated: np.ndarray, controls: np.ndarray) -> np.ndarray:
@@ -271,6 +347,25 @@ def run_experiment(
         identity["pilot_rows"] = pilot_rows
         identity["test_fraction"] = test_fraction
         result_rows.append(identity)
+
+        propensity_coefficients = _fit_reference_propensity(reference, transform)
+        propensity_coordinates = _test_propensity_coordinates(
+            test, transform, propensity_coefficients
+        )
+        psm = _match_one_method(
+            reference,
+            test,
+            transform,
+            np.ones(len(transform.feature_names), dtype=np.float64),
+            "propensity_score_logit",
+            split_number,
+            reference_att=identity["reference_att_g"],
+            reference_att_se=identity["reference_att_cluster_se_g"],
+            test_coordinates=propensity_coordinates,
+        )
+        psm["pilot_rows"] = pilot_rows
+        psm["test_fraction"] = test_fraction
+        result_rows.append(psm)
 
         if weights is not None:
             llm_weights = transform.diagonal_field_weights(weights)

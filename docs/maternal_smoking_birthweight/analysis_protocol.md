@@ -84,6 +84,11 @@ effect of maternal smoking during pregnancy on birth weight?
   Mahalanobis matching under these same settings. The repeated 99% / 1%
   comparison and evaluation metrics are specified in the
   [LLM matching protocol](../llm_matching/llm_matching_protocol.md).
+- Include an initial propensity-score comparator: fit an unpenalized logistic
+  treatment model on the 99% reference portion using the same encoded
+  covariates, then match test births on the fitted logit propensity score.
+  Model and matching details are specified in the
+  [LLM matching protocol](../llm_matching/llm_matching_protocol.md).
 
 ## Covariates
 
