@@ -104,6 +104,54 @@ effect of maternal smoking during pregnancy on birth weight?
 - Report missingness for each selected covariate and the number of records
   removed by the missing-data rule.
 
+## Covariate encoding and generalized Mahalanobis distance
+
+- Use fixed full-rank orthonormal Helmert contrasts with `k-1` columns for
+  categorical fields: 6 for `MRACEHISP`, 3 for grouped `MEDUC`, 3 for grouped
+  `CIG0_R`, and 5 for `BMI_R`. Encode `RF_PDIAB`, `RF_PHYPE`, and `SEX` as one
+  binary contrast column each. With one column each for standardized `MAGER`,
+  `PRIORLIVE`, and `PRIORDEAD`, the design has 23 columns.
+
+  | Original field | Encoding | Columns (`q_j`) |
+  |---|---|---:|
+  | `MAGER` | Standardized numeric | 1 |
+  | `MRACEHISP` | Seven recognized levels, Helmert contrasts | 6 |
+  | `MEDUC` | Four grouped levels (1-2, 3-4, 5-6, 7-8), Helmert contrasts | 3 |
+  | `CIG0_R` | Four grouped levels, Helmert contrasts | 3 |
+  | `PRIORLIVE` | Standardized numeric | 1 |
+  | `PRIORDEAD` | Standardized numeric | 1 |
+  | `BMI_R` | Six recognized levels, Helmert contrasts | 5 |
+  | `RF_PDIAB` | Binary contrast | 1 |
+  | `RF_PHYPE` | Binary contrast | 1 |
+  | `SEX` | Binary contrast | 1 |
+
+  The grouped `CIG0_R` levels are nonsmoker (0), light (codes 1-2), moderate
+  (code 3), and heavy (codes 4-5), as specified in
+  [`covariate_review.md`](covariate_review.md). This table also defines the
+  field-to-column mapping used to construct `V`.
+- Within each split, calculate numeric means and standard deviations and
+  categorical-contrast means from the 99% reference portion. Use these same
+  preprocessing values and encoded columns for the reference and 1% test
+  estimates across all methods. Do not standardize categorical contrast
+  columns separately.
+- Estimate the full covariance matrix `S` from the preprocessed 99% reference
+  portion and keep it fixed across methods in that split. If `S` is numerically
+  singular or ill-conditioned, apply one prespecified regularization rule
+  consistently across methods. Record the rule and its parameter before
+  comparing methods; do not choose them based on the 1% test outcomes.
+- Use the full-covariance generalized Mahalanobis distance
+  `d_V(x_i, x_j) = sqrt((x_i-x_j)' S^(-1/2) V S^(-1/2) (x_i-x_j))`.
+- Obtain one nonnegative LLM weight for each of the 10 original fields and
+  rescale those weights to have mean 1. Construct diagonal `V` by repeating
+  each field's weight across every encoded column derived from that field.
+  The identity-matrix reference uses `V = I` over the 23 encoded columns.
+  This primary mapping preserves the stated formula but may give fields with
+  more encoded columns greater effective influence.
+- As a sensitivity analysis, divide each field's weight by the number of
+  encoded columns in its block before assigning the corresponding diagonal
+  entries of `V`. Keep encoding, preprocessing, and `S` unchanged for this
+  comparison.
+
 ## Identification assumptions and diagnostics
 
 - No unmeasured confounding after adjustment for the selected covariates.
@@ -118,5 +166,3 @@ effect of maternal smoking during pregnancy on birth weight?
 ## Decisions still to confirm
 
 - Confirm how gestational length will be used and reported in sensitivity analysis.
-- Specify the exact distance implementation, including categorical contrast
-  coding and block normalization.

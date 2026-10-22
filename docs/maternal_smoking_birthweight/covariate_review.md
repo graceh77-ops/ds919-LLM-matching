@@ -105,19 +105,34 @@ describe how the gestational estimate was constructed.
     portion. Keep prior-birth counts on their original count scale initially;
     consider a nonlinear or grouped version only as a documented sensitivity
     if diagnostics show the linear count distance is unsuitable.
-  - Keep all transformations outcome-blind. Ask the LLM for one weight per
-    original covariate, not one weight per indicator column. Final contrast
-    coding and categorical-block normalization must be specified with the
-    matching distance so multi-level fields do not gain influence just by
-    expanding into more columns.
-  - Apply each covariate's weight to its full encoded block. In the equal-weight
-    baseline, give each of the 10 original covariates equal field-level weight;
-    in the LLM method, use one nonnegative LLM-assigned weight per original
-    covariate and rescale the weights to have mean 1. Normalize categorical
-    blocks using the 99% reference portion so their number of levels does not
-    itself increase their total influence; use the same coding and scales for
-    the 1% test portion. The exact full-rank contrast matrix and normalization
-    formula will be fixed with the matching-distance specification.
+  - Use full-rank orthonormal Helmert contrasts with `k-1` columns for each
+    categorical field. Use the fixed recognized category levels for every
+    split. The 7-level `MRACEHISP`, four-level grouped `MEDUC`, four-level
+    grouped `CIG0_R`, and six-level `BMI_R` produce 6, 3, 3, and 5 columns,
+    respectively. Encode binary `RF_PDIAB`, `RF_PHYPE`, and `SEX` as one
+    contrast column each. Together with one column each for standardized
+    `MAGER`, `PRIORLIVE`, and `PRIORDEAD`, the design has 23 encoded columns.
+  - For the full-covariance generalized Mahalanobis distance, estimate the
+    covariance matrix `S` from the 99% reference portion after applying the
+    fixed encoding and preprocessing. Use the same `S` and preprocessing for
+    every method in that split, including the 1% test portion. Standardize
+    numeric fields using reference-sample means and standard deviations; center
+    categorical contrasts using reference-sample means. Do not standardize
+    categorical contrast columns separately.
+  - Ask the LLM for one nonnegative weight per original field and rescale those
+    10 weights to have mean 1. Construct diagonal `V` by repeating each field's
+    weight across all encoded columns derived from that field. Thus, the
+    equal-weight reference uses `V = I` in the 23-column encoded design, while
+    the LLM method uses the repeated field weights. This primary allocation
+    follows the full-covariance formula; fields encoded with more columns may
+    consequently have more effective influence.
+  - As a weight-allocation sensitivity analysis, divide each field's weight by
+    the number of encoded columns in its block before filling the corresponding
+    diagonal entries of `V`. Keep the encoding, preprocessing, and `S` fixed
+    between the primary and sensitivity allocations. Check `S` for numerical
+    singularity; if regularization is needed, prespecify it and apply the same
+    rule to all methods within each split. All transformations and covariance
+    estimation are outcome-blind.
 - Decide whether to add `DMAR` or other optional candidates in a sensitivity
   analysis after reviewing timing and missingness.
 - Exclude reporting flags from matching; use them to interpret item reporting.
