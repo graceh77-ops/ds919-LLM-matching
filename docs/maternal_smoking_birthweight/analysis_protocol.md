@@ -80,8 +80,12 @@ effect of maternal smoking during pregnancy on birth weight?
   one eligible control is available. Therefore, assess match quality with
   covariate balance, overlap, and the distribution of matched distances, not
   retention alone. A caliper can be evaluated later as a sensitivity analysis.
-- The conventional estimator used to produce the 99% reference ATT remains to
-  be selected and documented.
+- For each 99% reference sample, use the equal-weight identity-matrix
+  generalized Mahalanobis method with 1:1 nearest-neighbor matching,
+  replacement, and no caliper to estimate the reference ATT.
+- Treat this as a pseudo-ground-truth reference, not the known true causal
+  effect. Compare each method's 1% test-sample ATT with the reference ATT from
+  the corresponding split.
 
 ## Covariates
 
@@ -114,6 +118,5 @@ effect of maternal smoking during pregnancy on birth weight?
 ## Decisions still to confirm
 
 - Confirm how gestational length will be used and reported in sensitivity analysis.
-- Select the conventional estimator for the 99% reference ATT.
 - Specify the exact distance implementation, including categorical contrast
   coding and block normalization.
