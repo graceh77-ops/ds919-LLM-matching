@@ -21,27 +21,35 @@ quality and causal effect estimates compared with conventional matching
 approaches?
 
 The exact LLM role, matching algorithm, comparison methods, and target
-estimand will be specified in the analysis protocol before the final
+estimand will be specified in the llm_matching_protocol before the final
 evaluation.
 
-## Evaluation Approach
 
-The evaluation will compare the LLM-assisted method with one or more
-conventional matching baselines.
+## Evaluation
 
-For the Natality case study, the evaluation may include:
+### Primary comparison: pseudo-ground-truth reference error
 
-- Covariate balance before and after matching, including standardized mean
-  differences.
-- Overlap between treatment and comparison groups.
-- Number and proportion of treated records retained or matched.
-- Estimated treatment effect and its uncertainty.
-- Sensitivity of results to matching and covariate-weight choices.
+For the Natality case study, we will evaluate whether matching methods applied to a held-out sample reproduce a pre-specified reference effect estimate from a larger sample.
 
-The Natality data do not provide a known true causal effect. Therefore, metrics
-such as mean squared error (MSE) against the true effect cannot be calculated
-from this real-data case study alone. Claims about causal effect-estimation
-accuracy require an evaluation dataset with a known ground truth.
+For each of R repeated, outcome-blind, treatment-stratified random splits, we will use 99% of the eligible singleton cohort as the reference sample and 1% as the test sample. A pre-specified conventional estimator will produce the reference ATT in the 99% sample. Each candidate method will estimate the ATT in the 1% test sample using the same treatment definition, outcome, covariates, estimand, and eligibility rules.
+
+For method m, the reference-relative mean squared error will be:
+
+MSE_m = (1 / R) * sum_r (ATT_test,m,r - ATT_reference,r)^2
+
+We will also report the root mean squared error (RMSE) in grams. Lower values indicate closer agreement with the reference estimate across repeated splits.
+
+This is a pseudo-ground-truth evaluation, not an evaluation against the known true causal effect. The reference estimate may retain residual confounding, and the MSE measures agreement with that reference estimator. The reference estimator will be specified before comparing methods; if propensity-score matching is used as the reference, the results will be interpreted as agreement with that approach.
+
+### Supporting diagnostics
+
+For each method, we will report:
+
+- Covariate balance before and after matching, including standardized mean differences (SMDs).
+- Propensity-score overlap or covariate-space matchability, as appropriate to the method.
+- Number and proportion of treated births retained or matched.
+- Estimated ATT in grams and its uncertainty.
+- Sensitivity of balance, retention, and ATT estimates to matching and covariate-weight choices.
 
 ## Real-Data Case Study
 
@@ -55,7 +63,7 @@ The case study uses the 2024 CDC Natality Public Use File.
   - Birth weight in grams
   - `9999`: not-stated code
 - **Candidate covariates:** documented in
-  [`docs/maternal_smoking_birthweight/`](docs/maternal_smoking_birthweight/)
+  [`docs/maternal_smoking_birthweight/covariate_review.md']
 
 Records with unknown treatment status or missing birth weight are excluded
 from the primary analysis cohort. Their counts are recorded in the

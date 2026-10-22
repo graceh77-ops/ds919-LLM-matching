@@ -26,7 +26,7 @@ of treated records retained, and the estimated effect with its uncertainty.
 Do not use MSE against a true effect for this dataset because the true causal
 effect is unknown.
 
-### Known-ground-truth benchmark
+### Known-ground-truth benchmark **THINKING ABOUT THIS**
 
 Use a benchmark with known treatment effects to assess effect-estimation error.
 ACIC 2016 is a candidate: its challenge data include real covariates and
@@ -46,18 +46,24 @@ and its exact implementation before running the final comparison.
 
 ## Methods to Compare
 
-1. **Unweighted matching:** Apply the selected matching algorithm with equal
-   covariate weights.
-2. **Conventional propensity-score matching:** Estimate propensity scores
-   using a pre-specified conventional model, then apply the selected matching
-   rule.
-3. **LLM-weighted matching:** Ask the LLM to assign importance weights to the
-   pre-specified covariates, then apply the same matching algorithm and rules
-   used for the unweighted method.
+All methods will use the same eligible cohort, treatment definition, outcome, covariate set, and estimand. Matching rules will be specified before comparing results.
 
-Keep the matching algorithm, caliper or distance rule, replacement rule, and
-cohort fixed across methods whenever possible. This helps isolate the
-contribution of LLM-generated weights.
+### LLM Method
+
+1. **LLM-weighted matching:** Ask the LLM to assign importance weights to the covariates using their definitions, the research question, and pre-treatment rationale. Apply those weights using the generalized Mahalanobis distance metric. The LLM will not receive outcome values or choose a different cohort or matching algorithm.
+
+### Primary Benchmarks
+
+2. **Identity-matrix unweighted matching:** Apply the generalized Mahalanobis distance metric with an identity weight matrix (`W = I`), giving equal weight to the pre-specified covariates.
+
+3. **PCA-based matching:** Apply a PCA-based procedure to the selected covariates and match observations using distances in the principal-component space. 
+
+### Additional Comparators
+
+4. **Propensity-score matching:** Estimate propensity scores using covariates, then apply a matching rule.
+
+5. **Genetic matching:** Use genetic-matching procedure to select covariate-distance weights and apply the generalized Mahalanobis distance metric.
+
 
 ## LLM Procedure
 
