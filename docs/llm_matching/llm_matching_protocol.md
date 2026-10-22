@@ -59,8 +59,12 @@ primary matching settings are defined in the Natality analysis protocol.
 
 Apply the same covariate-weighting task and Natality design in three stages:
 
-1. **Manual chat-interface matching:** first obtain covariate priorities or
-   weights through a chat interface, without using an API.
+1. **Manual chat-interface matching:** obtain covariate priorities in a new,
+   isolated session using the
+   [outcome-blind manual-chat protocol](manual_chat_weight_protocol.md) and
+   [standalone prompt](manual_chat_weight_prompt.md). Preserve earlier
+   weights that were elicited after pilot results as exploratory; do not mix
+   their results with the new blind-weight results.
 2. **DeepSeek API:** next implement the same weighting task through DeepSeek.
 3. **Advanced API:** then use the more advanced API/model to be identified
    after discussion with the professor.

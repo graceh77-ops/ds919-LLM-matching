@@ -5,9 +5,14 @@
 - Date: 2026-10-22
 - Stage: manual chat-interface elicitation; no API was used.
 - Interface/model: ChatGPT chat interface, GPT-6 family. Exact serving build and sampling settings were not exposed in this session.
+- Status: exploratory; these weights were elicited in a conversation where
+  pilot matching metrics had already appeared in context. Their influence on
+  the scores cannot be ruled out, so they are not certified as outcome-blind.
 - Retries: none recorded.
 - Manual edits to returned scores: none.
-- Outcome values or pilot matching metrics provided during elicitation: none.
+- The original score values in `manual_chat_weights.json` are preserved
+  unchanged. Use the separate isolated-session protocol for a new
+  outcome-blind weight set.
 
 ## Prompt specification
 
