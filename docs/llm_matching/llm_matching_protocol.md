@@ -101,8 +101,8 @@ specified outside the LLM.
 - **Genetic matching:** use a genetic-matching procedure to select distance weights and apply the generalized Mahalanobis distance metric.
 
 The analysis protocol specifies the primary matching algorithm, distance,
-covariate preprocessing, scaling, and reference estimator. Before final
-comparisons, also specify tie handling and settings needed by each comparator.
+covariate preprocessing, scaling, tie handling, and reference estimator.
+Specify settings needed by each additional comparator before final comparisons.
 Keep shared settings fixed across methods wherever possible so the comparison
 isolates the weighting approach.
 

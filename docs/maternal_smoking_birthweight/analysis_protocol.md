@@ -130,13 +130,14 @@ effect of maternal smoking during pregnancy on birth weight?
 - Within each split, calculate numeric means and standard deviations and
   categorical-contrast means from the 99% reference portion. Use these same
   preprocessing values and encoded columns for the reference and 1% test
-  estimates across all methods. Do not standardize categorical contrast
+  estimates across all methods. Use the population standard deviation
+  (`ddof = 0`) for numeric scaling and do not standardize categorical contrast
   columns separately.
 - Estimate the full covariance matrix `S` from the preprocessed 99% reference
-  portion and keep it fixed across methods in that split. If `S` is numerically
-  singular or ill-conditioned, apply one prespecified regularization rule
-  consistently across methods. Record the rule and its parameter before
-  comparing methods; do not choose them based on the 1% test outcomes.
+  portion using the sample covariance (`ddof = 1`) and keep it fixed across
+  methods in that split. For the inverse square root, floor eigenvalues below
+  `1e-8` times the largest eigenvalue to that threshold. Apply this same rule
+  across methods and do not select its parameter based on test outcomes.
 - Use the full-covariance generalized Mahalanobis distance
   `d_V(x_i, x_j) = sqrt((x_i-x_j)' S^(-1/2) V S^(-1/2) (x_i-x_j))`.
 - Obtain one nonnegative LLM weight for each of the 10 original fields and
@@ -149,6 +150,9 @@ effect of maternal smoking during pregnancy on birth weight?
   encoded columns in its block before assigning the corresponding diagonal
   entries of `V`. Keep encoding, preprocessing, and `S` unchanged for this
   comparison.
+- For distance ties within `1e-12 * max(1, distance)`, select the eligible
+  control with the smallest source `record_number`. Allow control reuse and
+  apply no caliper in the initial 1:1 nearest-neighbor analysis.
 
 ## Identification assumptions and diagnostics
 
