@@ -80,12 +80,10 @@ effect of maternal smoking during pregnancy on birth weight?
   one eligible control is available. Therefore, assess match quality with
   covariate balance, overlap, and the distribution of matched distances, not
   retention alone. A caliper can be evaluated later as a sensitivity analysis.
-- For each 99% reference sample, use the equal-weight identity-matrix
-  generalized Mahalanobis method with 1:1 nearest-neighbor matching,
-  replacement, and no caliper to estimate the reference ATT.
-- Treat this as a pseudo-ground-truth reference, not the known true causal
-  effect. Compare each method's 1% test-sample ATT with the reference ATT from
-  the corresponding split.
+- The conventional reference is equal-weight identity-matrix generalized
+  Mahalanobis matching under these same settings. The repeated 99% / 1%
+  comparison and evaluation metrics are specified in the
+  [LLM matching protocol](../llm_matching/llm_matching_protocol.md).
 
 ## Covariates
 

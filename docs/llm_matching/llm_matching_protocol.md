@@ -1,45 +1,28 @@
 # LLM Matching Evaluation Protocol
 
-## Objective and current scope
+## Objective and scope
 
-Evaluate whether LLM-assisted covariate weighting improves matching quality and 
-treatment-effect estimation compared with conventional matching methods.
-
-The current empirical application is the 2024 CDC Natality Public Use File,
-focused on maternal smoking during pregnancy and birth weight among singleton
-births. ACIC 2016 is a possible future known-ground-truth benchmark; it is
-outside the current scope and will be discussed further before any work begins 
-on it.
+Evaluate whether LLM-assisted covariate weighting improves matching quality
+and treatment-effect estimation compared with conventional matching methods.
+The current application is the 2024 CDC Natality study of maternal smoking
+during pregnancy and birth weight. Study-specific cohort and variable
+definitions are maintained in the
+[Natality analysis protocol](../maternal_smoking_birthweight/analysis_protocol.md).
+ACIC 2016 is a possible future benchmark, outside the current scope.
 
 ## Research question
 
 Does LLM-generated covariate weighting improve matching performance compared with conventional matching approaches on the Natality application?
 
-## Natality study design
-
-### Treatment, outcome, and estimand
-
-- **Treatment:** `CIG_REC = Y` (reported cigarette smoking during pregnancy).
-- **Comparison:** `CIG_REC = N` (no reported smoking during pregnancy).
-  Unknown treatment status is excluded, not classified as nonsmoking.
-- **Outcome:** `DBWT`, birth weight in grams; not-stated or invalid values are
-  excluded.
-- **Proposed estimand:** ATT among treated births that can be matched to
-  comparable nonsmoking births. Report treated births that are not matched.
-
-The cohort and primary covariate eligibility rules are documented in the
-[maternal smoking analysis protocol](../maternal_smoking_birthweight/analysis_protocol.md).
-The current primary population is singleton births. Use the same eligible
-cohort and covariate handling for every method and every split.
-
-### Repeated 99% / 1% reference comparison
+## Repeated 99% / 1% reference comparison
 
 For each of `R` repeated, outcome-blind, treatment-stratified random splits:
 
 1. Assign 99% of eligible singleton births to a reference sample and 1% to a
    test sample, preserving treatment strata in the split.
-2. Apply a conventional matching estimator, specified before final evaluation,
-   to the 99% reference sample to estimate the reference ATT.
+2. Apply identity-matrix generalized Mahalanobis matching, using the fixed
+   study-specific distance specification, to the 99% reference sample to
+   estimate the reference ATT.
 3. Apply each candidate method separately to the same 1% test sample and
    estimate its test-sample ATT using the fixed treatment, outcome, covariates,
    estimand, eligibility rules, and matching rules.
@@ -66,9 +49,10 @@ The present work remains 2024 only. Before pooling years, harmonize variables
 and eligibility rules and document how calendar year affects the target
 population and analysis.
 
-The number of repetitions `R`, random seed strategy, reference estimator, and
-matching specifications are not yet finalized. Specify and document them
-before comparing final results.
+The number of repetitions `R` and random seed strategy are not yet finalized.
+Specify and document them before comparing final results. The reference
+estimator and primary matching settings are defined in the Natality analysis
+protocol.
 
 ## Staged LLM workflow
 
@@ -105,7 +89,8 @@ specified outside the LLM.
 ### Primary conventional comparisons
 
 - **Identity-matrix unweighted matching:** generalized Mahalanobis distance
-  with identity weight matrix (`W = I`) after covariate coding and scaling.
+  with identity weight matrix (`V = I`) after the study-specific covariate
+  coding and scaling.
 - **PCA-based matching:** match in the retained principal-component space.
   Document preprocessing, component-retention rule, and distance measure.
 
@@ -115,34 +100,25 @@ specified outside the LLM.
   covariates and apply a fixed matching rule.
 - **Genetic matching:** use a genetic-matching procedure to select distance weights and apply the generalized Mahalanobis distance metric.
 
-Specify the matching algorithm, distance calculation, covariate preprocessing
-and scaling, caliper, replacement rule, tie handling, and conventional
-reference estimator before final comparisons. Keep these settings fixed across
-methods whenever possible so the comparison isolates the weighting approach.
+The analysis protocol specifies the primary matching algorithm, distance,
+covariate preprocessing, scaling, and reference estimator. Before final
+comparisons, also specify tie handling and settings needed by each comparator.
+Keep shared settings fixed across methods wherever possible so the comparison
+isolates the weighting approach.
 
 ## Evaluation and reporting
 
 For every method and split, report:
 
-- Reference ATT, test-sample ATT, reference error, and uncertainty for the
-  estimated ATT.
 - Absolute standardized mean differences before and after matching.
 - Treatment-group overlap or covariate-space matchability.
 - Number and proportion of treated births retained or matched.
-- Sensitivity of balance, retention, ATT, and reference error to prespecified
-  matching settings and covariate weights.
+- Sensitivity of balance and retention to prespecified matching settings and
+  covariate weights.
 
-Report mean squared reference error and RMSE across repeated splits as measures
-of agreement with the conventional reference estimator. Do not describe them
-as error against the true causal effect. Do not interpret improved balance
-alone as proof of improved effect estimation.
-
-## Possible future benchmark
-
-ACIC 2016 may be considered later as a separate known-ground-truth benchmark.
-It is not part of the current Natality procedure, and performance on it would
-not directly establish the true effect of maternal smoking. Confirm whether to
-include it with the professor before starting that work.
+Report ATT uncertainty alongside the reference-error metrics defined above.
+Do not describe reference error as error against the true causal effect. Do
+not interpret improved balance alone as proof of improved effect estimation.
 
 ## Reproducibility
 

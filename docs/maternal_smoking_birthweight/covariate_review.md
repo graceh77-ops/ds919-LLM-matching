@@ -95,49 +95,13 @@ describe how the gestational estimate was constructed.
   `3` as moderate smoking (11-20 cigarettes/day), and codes `4-5` as heavy
   smoking (21+ cigarettes/day). Do not treat the grouped categories as equally
   spaced numeric values.
-- Recommended first-pass matching representation and scaling:
-  - Treat `MRACEHISP`, grouped `MEDUC`, grouped `CIG0_R`, and `BMI_R` as
-    categorical blocks, not numeric scores. Encode `RF_PDIAB`, `RF_PHYPE`, and
-    `SEX` as binary indicators.
-  - Treat `MAGER`, `PRIORLIVE`, and `PRIORDEAD` as numeric in the first pass.
-    Center and divide by the standard deviation calculated from the 99%
-    reference portion of each split; apply those same values to the 1% test
-    portion. Keep prior-birth counts on their original count scale initially;
-    consider a nonlinear or grouped version only as a documented sensitivity
-    if diagnostics show the linear count distance is unsuitable.
-  - Use full-rank orthonormal Helmert contrasts with `k-1` columns for each
-    categorical field. Use the fixed recognized category levels for every
-    split. The 7-level `MRACEHISP`, four-level grouped `MEDUC`, four-level
-    grouped `CIG0_R`, and six-level `BMI_R` produce 6, 3, 3, and 5 columns,
-    respectively. Encode binary `RF_PDIAB`, `RF_PHYPE`, and `SEX` as one
-    contrast column each. Together with one column each for standardized
-    `MAGER`, `PRIORLIVE`, and `PRIORDEAD`, the design has 23 encoded columns.
-  - For the full-covariance generalized Mahalanobis distance, estimate the
-    covariance matrix `S` from the 99% reference portion after applying the
-    fixed encoding and preprocessing. Use the same `S` and preprocessing for
-    every method in that split, including the 1% test portion. Standardize
-    numeric fields using reference-sample means and standard deviations; center
-    categorical contrasts using reference-sample means. Do not standardize
-    categorical contrast columns separately.
-  - Ask the LLM for one nonnegative weight per original field and rescale those
-    10 weights to have mean 1. Construct diagonal `V` by repeating each field's
-    weight across all encoded columns derived from that field. Thus, the
-    equal-weight reference uses `V = I` in the 23-column encoded design, while
-    the LLM method uses the repeated field weights. This primary allocation
-    follows the full-covariance formula; fields encoded with more columns may
-    consequently have more effective influence.
-  - As a weight-allocation sensitivity analysis, divide each field's weight by
-    the number of encoded columns in its block before filling the corresponding
-    diagonal entries of `V`. Keep the encoding, preprocessing, and `S` fixed
-    between the primary and sensitivity allocations. Check `S` for numerical
-    singularity; if regularization is needed, prespecify it and apply the same
-    rule to all methods within each split. All transformations and covariance
-    estimation are outcome-blind.
+- Use the fixed encoding, preprocessing, covariance estimation, and
+  field-to-column weight mapping in the
+  [analysis protocol](analysis_protocol.md) for matching. That protocol is the
+  single source of truth for the 23-column design and generalized Mahalanobis
+  distance.
 - Decide whether to add `DMAR` or other optional candidates in a sensitivity
   analysis after reviewing timing and missingness.
 - Exclude reporting flags from matching; use them to interpret item reporting.
-- Missing-data rule selected: use flag-aware complete cases for both singleton
-  primary and all-births sensitivity cohorts. Require recognized values for
-  all primary covariates and reporting flags `F_MHISP`, `F_MEDUC`, `F_CIGS_0`,
-  `F_M_HT`, `F_PWGT`, `F_RF_PDIAB`, and `F_RF_PHYPER` equal to `1`. Retain
-  CDC-imputed age, race, and sex values and report their imputation flags.
+- The flag-aware missing-data rule and cohort eligibility are specified in the
+  [analysis protocol](analysis_protocol.md).
