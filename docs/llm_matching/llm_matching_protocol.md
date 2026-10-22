@@ -19,7 +19,9 @@ Does LLM-generated covariate weighting improve matching performance compared wit
 For each of `R` repeated, outcome-blind, treatment-stratified random splits:
 
 1. Assign 99% of eligible singleton births to a reference sample and 1% to a
-   test sample, preserving treatment strata in the split.
+   test sample, preserving treatment strata in the split. Use NumPy's seeded
+   `default_rng` generator (PCG64); within each treatment group, round the 1%
+   test count to the nearest integer (half-up) and sample without replacement.
 2. Apply identity-matrix generalized Mahalanobis matching, using the fixed
    study-specific distance specification, to the 99% reference sample to
    estimate the reference ATT.
@@ -49,10 +51,9 @@ The present work remains 2024 only. Before pooling years, harmonize variables
 and eligibility rules and document how calendar year affects the target
 population and analysis.
 
-The number of repetitions `R` and random seed strategy are not yet finalized.
-Specify and document them before comparing final results. The reference
-estimator and primary matching settings are defined in the Natality analysis
-protocol.
+The number of repetitions `R` and the seed value are not yet finalized.
+Specify them before comparing final results. The reference estimator and
+primary matching settings are defined in the Natality analysis protocol.
 
 ## Staged LLM workflow
 
@@ -117,6 +118,9 @@ For every method and split, report:
   covariate weights.
 
 Report ATT uncertainty alongside the reference-error metrics defined above.
+For the initial matched ATT, estimate uncertainty with a control-clustered
+standard error to account for reuse of the same control for multiple treated
+records.
 Do not describe reference error as error against the true causal effect. Do
 not interpret improved balance alone as proof of improved effect estimation.
 
