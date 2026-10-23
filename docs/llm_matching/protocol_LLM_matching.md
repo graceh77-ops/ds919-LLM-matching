@@ -7,7 +7,7 @@ and treatment-effect estimation compared with conventional matching methods.
 The current application is the 2024 CDC Natality study of maternal smoking
 during pregnancy and birth weight. Study-specific cohort and variable
 definitions are maintained in the
-[Natality analysis protocol](../maternal_smoking_birthweight/analysis_protocol.md).
+[Natality analysis protocol](../maternal_smoking_birthweight/protocol_maternal_smoking_dataset.md).
 ACIC 2016 is a possible future benchmark, outside the current scope.
 
 ## Research question

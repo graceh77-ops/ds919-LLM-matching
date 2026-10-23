@@ -80,15 +80,18 @@ effect of maternal smoking during pregnancy on birth weight?
   one eligible control is available. Therefore, assess match quality with
   covariate balance, overlap, and the distribution of matched distances, not
   retention alone. A caliper can be evaluated later as a sensitivity analysis.
-- The conventional reference is equal-weight identity-matrix generalized
-  Mahalanobis matching under these same settings. The repeated 99% / 1%
-  comparison and evaluation metrics are specified in the
-  [LLM matching protocol](../llm_matching/llm_matching_protocol.md).
+- The primary reference-cohort estimator for the repeated 99% / 1%
+  comparison is AIPW-ATT, using a reference-fitted propensity model and a
+  control-only outcome model on the shared encoded covariates. IPW-ATT and
+  outcome-regression ATT are reported separately as reference sensitivities.
+  Estimator formulas, model specifications, diagnostics, and evaluation
+  metrics are specified in the
+  [LLM matching protocol](../llm_matching/protocol_LLM_matching.md).
 - Include an initial propensity-score comparator: fit an unpenalized logistic
   treatment model on the 99% reference portion using the same encoded
   covariates, then match test births on the fitted logit propensity score.
   Model and matching details are specified in the
-  [LLM matching protocol](../llm_matching/llm_matching_protocol.md).
+  [LLM matching protocol](../llm_matching/protocol_LLM_matching.md).
 
 ## Covariates
 
@@ -148,7 +151,8 @@ effect of maternal smoking during pregnancy on birth weight?
 - Obtain one nonnegative LLM weight for each of the 10 original fields and
   rescale those weights to have mean 1. Construct diagonal `V` by repeating
   each field's weight across every encoded column derived from that field.
-  The identity-matrix reference uses `V = I` over the 23 encoded columns.
+  The identity-matrix matching baseline uses `V = I` over the 23 encoded
+  columns.
   This primary mapping preserves the stated formula but may give fields with
   more encoded columns greater effective influence.
 - As a sensitivity analysis, divide each field's weight by the number of
