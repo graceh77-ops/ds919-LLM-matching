@@ -2,9 +2,10 @@
 
 ## Status and scope
 
-This document records the existing implementation and the configuration to
-hold fixed for the next comparison. It does not authorize or report a new run.
-No matching results have been changed or regenerated as part of this record.
+This document records the current implementation and configuration. Historical
+matching outputs are preserved. The new AIPW implementation has been checked
+with the development pilot recorded below; no new full-cohort AIPW comparison
+has been run.
 The scope is the 2024 CDC Natality singleton cohort described in the
 [maternal smoking analysis protocol](../maternal_smoking_birthweight/analysis_protocol.md).
 
@@ -15,7 +16,7 @@ The scope is the 2024 CDC Natality singleton cohort described in the
 | Eligible cohort | 2024 singleton births (`DPLURAL = 1`) with known smoking treatment, valid birth weight, and flag-aware complete cases on the ten prespecified covariates |
 | Treatment | `CIG_REC = Y` versus `CIG_REC = N` |
 | Outcome | Birth weight, grams (`DBWT`) |
-| Estimand | ATT for treated births matched to nonsmoking controls |
+| Estimand | ATT for treated births in each eligible cohort partition |
 | Covariates | `MAGER`, `MRACEHISP`, `MEDUC`, `CIG0_R`, `PRIORLIVE`, `PRIORDEAD`, `BMI_R`, `RF_PDIAB`, `RF_PHYPE`, `SEX` |
 | Encoding | Three numeric fields standardized using reference-sample mean and population SD (`ddof = 0`); four categorical fields mapped to fixed recognized levels and full-rank orthonormal Helmert contrasts; three binary fields represented by one contrast column each; 23 encoded columns total |
 | Covariance | Full sample covariance (`ddof = 1`) estimated from encoded reference records once per split and reused by generalized Mahalanobis methods in that split |
@@ -24,28 +25,30 @@ The scope is the 2024 CDC Natality singleton cohort described in the
 | Field-weight mapping | Rescale ten nonnegative field scores to mean 1, then repeat each field score on all columns from that field; column-normalized allocation is a separately labeled sensitivity method |
 | Match rule | 1:1 nearest neighbor, with replacement, no caliper; ties within the coded tolerance resolve to the smallest source `record_number` |
 | Split | Treatment-stratified random 99% reference / 1% test, without replacement within each treatment stratum; use the same split for methods in a repetition |
-| Evaluation | Match reference identity method to form the pseudo-reference ATT; apply each comparator within the test cohort; report ATT, reference error, clustered uncertainty, balance, and control reuse |
+| Primary reference estimator | AIPW-ATT in the 99% reference cohort: unpenalized logistic propensity model and control-only OLS outcome model, each using the shared encoded covariates; propensity clipping at `1e-6` and `1 - 1e-6` for finite odds weights |
+| Reference sensitivities | IPW-ATT (normalized odds-weighted control mean) and outcome-regression ATT; report separately without averaging |
+| Matching comparators | Identity-matrix generalized Mahalanobis, PSM, and LLM-weighted matching are each applied to the 1% test cohort under the shared matching rules |
+| Evaluation | Report each test-sample ATT and its error relative to reference-cohort AIPW, plus the IPW and outcome-regression reference sensitivities, uncertainty, overlap, balance, weights, ESS, and matching diagnostics |
 
 Repeated splits draw from the same source cohort. They are within-cohort
 resampling, not independent validation or external replication.
 
 ## Method status
 
-- **Identity generalized Mahalanobis:** reference estimator and primary
-  conventional comparator under the shared configuration.
-- **LLM field weighting:** existing manual weights remain exploratory because
-  their elicitation occurred in a context where pilot metrics were present.
-  Regenerate and freeze outcome-blind weights in a separate session using the
-  [manual-chat protocol](manual_chat_weight_protocol.md) before evaluating
-  that new weight set. Keep its results separate from exploratory results.
-- **PSM:** the comparator family was identified earlier, but its detailed
-  implementation was finalized on 2026-10-22 after reviewing the first
-  full-cohort identity/LLM comparison and before the PSM run. Exact time was
-  not recorded. The unpenalized logistic model uses the same 23 encoded
-  covariates, is fitted on reference records, and is applied to test rows for
-  logit-score matching under the shared 1:1 replacement/no-caliper rule. This
-  is a later refinement and exploratory comparator for this phase. Hold its
-  current specification fixed.
+- **AIPW-ATT:** primary pseudo-reference estimator. Its propensity and control
+  outcome models use the same reference-fitted 23-column representation as the
+  matching methods. AIPW diagnostics include propensity overlap, weighted SMD,
+  odds-weight distribution and maximum, clipping count, effective sample size,
+  and a robust influence-function standard error with a 95% Wald interval.
+- **IPW-ATT and outcome-regression ATT:** separate reference sensitivity
+  estimates; do not average them with AIPW.
+- **LLM field weighting:** Outcome-blind manual-chat weights and DeepSeek API  
+  weights have been generated and recorded separately.
+- **Identity generalized Mahalanobis:** matching comparator evaluated within
+  the 1% test cohort, on the same footing as PSM and LLM-weighted matching.
+- **PSM:** The unpenalized logistic model uses the same 23 encoded covariates, 
+  is fitted on reference records, and is applied to test rows for logit-score 
+  matching under the shared 1:1 replacement/no-caliper rule.
 - **PCA and genetic matching:** not included in the frozen current comparison;
   their detailed specifications have not been finalized.
 
@@ -53,15 +56,15 @@ resampling, not independent validation or external replication.
 
 The recorded historical run setting is seed `20261022` with one split. The
 full-cohort comparison used the 1% test fraction. The earlier development
-pilot used a 10,000-row random subset and a 20% test fraction. These are
-historical exploratory settings, not a selected final repetition plan. The
-final repetition count and seed plan remain open and must be recorded before
-the next comparison.
+pilot used a 10,000-row random subset and a 20% test fraction. The final repetition count and seed plan remain open and must be recorded before
+the next comparison. The first AIPW implementation validation also used the
+existing 10,000-row pilot mode, one split, seed `20261022`, and 20% test
+fraction; its outputs are `results/pilot runs/aipw_reference_validation.csv`
+and `results/pilot runs/aipw_reference_validation_summary.csv`. This is a
+development validation, not a full-cohort estimate or final comparison.
 
-Existing output files are retained as historical results, including the
-`full_cohort_manual_chat_*` outputs and pilot outputs under
-`results/manual llm matching/`. Do not overwrite or combine them with results
-from the outcome-blind weight set.
+The matching output tables retain method-level test-sample estimates
+and diagnostics. 
 
 ## Leakage boundary and refactor review
 
@@ -83,9 +86,8 @@ proposed code-quality safeguard, not as a current pipeline property.
 
 ## Decisions still open
 
-1. Regenerate and document the independent outcome-blind manual weights.
-2. Choose and record the number of within-cohort splits and seed procedure for
+1. Choose and record the number of within-cohort splits and seed procedure for
    the next comparison.
-3. Review whether to implement the function-boundary refactor before running
+2. Review whether to implement the function-boundary refactor before running
    further comparisons.
-4. Specify PCA and genetic matching only if they are brought into scope.
+3. Specify PCA and genetic matching only if they are brought into scope.

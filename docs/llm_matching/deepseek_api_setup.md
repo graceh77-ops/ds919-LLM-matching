@@ -4,25 +4,22 @@
 
 This script requests one outcome-blind set of covariate-priority weights from
 DeepSeek. It sends only the text between the delimiters in
-[`manual_chat_weight_prompt.md`](manual_chat_weight_prompt.md). It does not load
-the natality cohort, previous weights, matching outputs, or evaluation metrics.
-The original manual-chat weights remain separate.
+[`llm_propt_covariate_weights.md`](llm_prompt_covariate_weights.md). It does 
+not load the natality cohort, previous weights, matching outputs, or evaluation 
+metrics.
 
 ## Local setup
 
-1. Create an API key through your DeepSeek account. Keep the key private.
+1. Create an API key through your DeepSeek account. Keep the key private. If a
+   key was exposed, revoke it and use a newly created key.
 2. In a PowerShell terminal opened at the project root, set the key for that
    terminal session. This prompts without echoing the key as you type or paste:
 
    ```powershell
-   $secureKey = Read-Host "DeepSeek API key" -AsSecureString
-   $keyPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureKey)
-   $env:DEEPSEEK_API_KEY = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($keyPointer)
-   [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($keyPointer)
+   $env:DEEPSEEK_API_KEY = [System.Net.NetworkCredential]::new("", (Read-Host "DeepSeek API key" -AsSecureString)).Password
    ```
 
-   The key is not saved in the repository. `.env` files are ignored by Git,
-   but this setup does not require one.
+   The key is not saved in the repository.
 3. Run exactly one elicitation:
 
    ```powershell
@@ -36,8 +33,7 @@ The original manual-chat weights remain separate.
    ```
 
    The default model is `deepseek-flash`. To select another currently available
-   model, set `DEEPSEEK_MODEL` before running. The script uses Python's standard
-   library, so no additional package installation is needed.
+   model, set `DEEPSEEK_MODEL` before running.
 4. Keep the terminal open until it reports success or an error. A successful
    run writes a timestamped folder under
    `results/manual llm matching/deepseek_api/` with the validated weights, raw
@@ -59,10 +55,6 @@ The integration uses the official DeepSeek chat completions endpoint at
 underlying model version; the response's returned model is also saved in each
 run record. These names and versions can change, so verify DeepSeek's official
 documentation before later reruns.
-
-The model runs remotely. This script does not download model weights and should
-use very little local memory; API usage is billed by token according to the
-current DeepSeek pricing page.
 
 ## References
 
