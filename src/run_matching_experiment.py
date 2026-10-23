@@ -26,6 +26,8 @@ DEFAULT_INPUT = PROJECT_ROOT / "data" / "processed" / "2024" / "analysis_cohort_
 DEFAULT_OUTPUT = PROJECT_ROOT / "results" / "matching_experiment.csv"
 DEFAULT_SUMMARY_OUTPUT = PROJECT_ROOT / "results" / "matching_experiment_summary.csv"
 DEFAULT_TEST_FRACTION = 0.01
+REFERENCE_MODEL_CHUNK_SIZE = 100_000
+PROPENSITY_CLIP_EPSILON = 1e-6
 
 INPUT_COLUMNS = [
     "record_number",
@@ -76,45 +78,22 @@ def _stratified_split(
     return reference_indices, test_indices
 
 
-def _transform_distance_coordinates(
-    data: pd.DataFrame,
-    transform: Any,
-    factor: np.ndarray,
-    chunk_size: int = 100_000,
-) -> np.ndarray:
-    """Transform and project rows in chunks to bound peak feature-matrix memory."""
-    coordinates = np.empty((len(data), factor.shape[1]), dtype=np.float64)
-    for start in range(0, len(data), chunk_size):
-        stop = min(start + chunk_size, len(data))
-        features = transform.transform(data.iloc[start:stop])
-        coordinates[start:stop] = features @ factor
-    return coordinates
-
-
 def _match_one_method(
-    reference: pd.DataFrame,
     test: pd.DataFrame,
     transform: Any,
     diagonal_weights: np.ndarray,
     method_name: str,
     split_number: int,
-    reference_att: float | None = None,
-    reference_att_se: float | None = None,
     test_coordinates: tuple[np.ndarray, np.ndarray] | None = None,
     test_features: np.ndarray | None = None,
 ) -> dict[str, Any]:
-    """Estimate ATT in reference and test portions using one fixed distance."""
-    reference_treated = reference.loc[reference["treatment_binary"] == 1]
-    reference_controls = reference.loc[reference["treatment_binary"] == 0]
+    """Estimate the method's matched ATT in the test portion only."""
     test_treated = test.loc[test["treatment_binary"] == 1]
     test_controls = test.loc[test["treatment_binary"] == 0]
-    if reference_treated.empty or reference_controls.empty:
-        raise ValueError("Reference portion must contain treated and control records.")
     if test_treated.empty or test_controls.empty:
         raise ValueError("Test portion must contain treated and control records.")
 
     test_treated_mask = test["treatment_binary"].to_numpy() == 1
-    test_control_mask = ~test_treated_mask
     if test_features is None:
         test_treated_features = transform.transform(test_treated)
         test_control_features = transform.transform(test_controls)
@@ -124,41 +103,7 @@ def _match_one_method(
         test_treated_features = test_features[test_treated_mask]
         test_control_features = test_features[test_control_mask]
 
-    factor = (
-        transform.distance_factor(diagonal_weights)
-        if test_coordinates is None or reference_att is None
-        else None
-    )
-
-    reference_unique_controls: int | None = None
-    reference_max_reuse: int | None = None
-    if reference_att is None:
-        reference_control_coordinates = _transform_distance_coordinates(
-            reference_controls, transform, factor
-        )
-        reference_treated_coordinates = _transform_distance_coordinates(
-            reference_treated, transform, factor
-        )
-        reference_match = nearest_neighbor_with_replacement(
-            reference_treated_coordinates,
-            reference_control_coordinates,
-            reference_controls["record_number"].to_numpy(),
-        )
-        reference_treated_outcomes = reference_treated["birthweight_g"].to_numpy(dtype=np.float64)
-        reference_control_outcomes = reference_controls["birthweight_g"].to_numpy(dtype=np.float64)
-        reference_att = estimate_att(
-            reference_treated_outcomes,
-            reference_control_outcomes,
-            reference_match,
-        )
-        reference_differences = reference_treated_outcomes - reference_control_outcomes[
-            reference_match.control_indices
-        ]
-        reference_att_se = _cluster_robust_se(
-            reference_differences, reference_match.control_indices
-        )
-        reference_unique_controls = int(np.unique(reference_match.control_indices).size)
-        reference_max_reuse = int(np.bincount(reference_match.control_indices).max())
+    factor = transform.distance_factor(diagonal_weights) if test_coordinates is None else None
 
     if test_coordinates is None:
         test_control_coordinates = test_control_features @ factor
@@ -185,15 +130,9 @@ def _match_one_method(
     result = {
         "split": split_number,
         "method": method_name,
-        "reference_att_g": reference_att,
-        "reference_att_cluster_se_g": reference_att_se,
         "test_att_g": test_att,
-        "reference_error_g": test_att - reference_att,
         "test_att_cluster_se_g": test_se,
-        "reference_treated_n": int(len(reference_treated)),
         "test_treated_n": int(len(test_treated)),
-        "reference_unique_controls_n": reference_unique_controls,
-        "reference_max_control_reuse": reference_max_reuse,
         "test_unique_controls_n": int(np.unique(test_match.control_indices).size),
         "test_max_control_reuse": int(test_reuse_counts.max()),
         "test_distance_median": float(np.median(test_match.distances)),
@@ -256,6 +195,267 @@ def _fit_reference_propensity(
     if not fit.success:
         raise RuntimeError(f"Reference propensity model did not converge: {fit.message}")
     return np.asarray(fit.x, dtype=np.float64)
+
+
+def _fit_reference_control_outcome(
+    reference: pd.DataFrame,
+    transform: Any,
+    chunk_size: int = REFERENCE_MODEL_CHUNK_SIZE,
+) -> np.ndarray:
+    """Fit OLS birth weight on an intercept and encoded covariates among controls.
+
+    Incremental QR keeps the design matrix bounded to one chunk, while avoiding
+    the numerical instability of solving the normal equations.
+    """
+    treatment = reference["treatment_binary"].to_numpy(dtype=np.int8)
+    control_indices = np.flatnonzero(treatment == 0)
+    if len(control_indices) <= len(transform.feature_names):
+        raise ValueError("Too few reference controls to fit the outcome model.")
+
+    triangular = None
+    column_count = len(transform.feature_names) + 2  # intercept, covariates, outcome
+    for start in range(0, len(control_indices), chunk_size):
+        indices = control_indices[start : start + chunk_size]
+        rows = reference.iloc[indices]
+        features = transform.transform(rows)
+        design = np.column_stack((np.ones(len(rows), dtype=np.float64), features))
+        outcome = rows["birthweight_g"].to_numpy(dtype=np.float64)
+        augmented = np.column_stack((design, outcome))
+        stack = augmented if triangular is None else np.vstack((triangular, augmented))
+        triangular = np.linalg.qr(stack, mode="r")
+
+    coefficient_count = len(transform.feature_names) + 1
+    coefficients, _, rank, _ = np.linalg.lstsq(
+        triangular[:, :coefficient_count], triangular[:, coefficient_count], rcond=None
+    )
+    if rank < coefficient_count:
+        raise ValueError("The reference control outcome-model design is rank deficient.")
+    return np.asarray(coefficients, dtype=np.float64)
+
+
+def _quantile_diagnostics(prefix: str, values: np.ndarray) -> dict[str, float]:
+    quantiles = np.quantile(values, [0.0, 0.01, 0.05, 0.5, 0.95, 0.99, 1.0])
+    suffixes = ("min", "p01", "p05", "median", "p95", "p99", "max")
+    return {f"{prefix}_{suffix}": float(value) for suffix, value in zip(suffixes, quantiles)}
+
+
+def _reference_aipw_estimates(
+    reference: pd.DataFrame,
+    transform: Any,
+    propensity_coefficients: np.ndarray,
+    control_outcome_coefficients: np.ndarray,
+    chunk_size: int = REFERENCE_MODEL_CHUNK_SIZE,
+) -> dict[str, Any]:
+    """Calculate reference AIPW-ATT, IPW-ATT, OR-ATT, and AIPW diagnostics.
+
+    ATT AIPW is the treated mean residual from m0(X), minus the control
+    propensity-odds-weighted residual sum divided by the treated count. The
+    odds weights use propensities clipped to [1e-6, 1 - 1e-6] for numerical
+    stability; raw propensity scores are retained for overlap diagnostics.
+    """
+    treatment = reference["treatment_binary"].to_numpy(dtype=np.int8)
+    treated_count = int(np.count_nonzero(treatment == 1))
+    control_count = int(np.count_nonzero(treatment == 0))
+    if treated_count == 0 or control_count == 0:
+        raise ValueError("Reference cohort must contain treated and control records.")
+
+    feature_count = len(transform.feature_names)
+    treated_propensity = np.empty(treated_count, dtype=np.float64)
+    control_propensity = np.empty(control_count, dtype=np.float64)
+    control_weights = np.empty(control_count, dtype=np.float64)
+    treated_cursor = 0
+    control_cursor = 0
+
+    treated_residual_sum = 0.0
+    treated_outcome_sum = 0.0
+    control_weight_sum = 0.0
+    control_weight_squared_sum = 0.0
+    control_weighted_outcome_sum = 0.0
+    control_weighted_residual_sum = 0.0
+    aipw_score_squared_sum = 0.0
+
+    treated_feature_sum = np.zeros(feature_count, dtype=np.float64)
+    treated_feature_squared_sum = np.zeros(feature_count, dtype=np.float64)
+    control_feature_sum = np.zeros(feature_count, dtype=np.float64)
+    control_feature_squared_sum = np.zeros(feature_count, dtype=np.float64)
+    weighted_control_feature_sum = np.zeros(feature_count, dtype=np.float64)
+    weighted_control_feature_squared_sum = np.zeros(feature_count, dtype=np.float64)
+
+    for start in range(0, len(reference), chunk_size):
+        stop = min(start + chunk_size, len(reference))
+        rows = reference.iloc[start:stop]
+        features = transform.transform(rows)
+        treated_mask = treatment[start:stop] == 1
+        outcome = rows["birthweight_g"].to_numpy(dtype=np.float64)
+        logits = propensity_coefficients[0] + features @ propensity_coefficients[1:]
+        propensity = expit(logits)
+        m0 = control_outcome_coefficients[0] + features @ control_outcome_coefficients[1:]
+        residual = outcome - m0
+
+        if treated_mask.any():
+            treated_features = features[treated_mask]
+            treated_residual = residual[treated_mask]
+            treated_outcome = outcome[treated_mask]
+            count = len(treated_outcome)
+            treated_propensity[treated_cursor : treated_cursor + count] = propensity[treated_mask]
+            treated_cursor += count
+            treated_residual_sum += float(treated_residual.sum())
+            treated_outcome_sum += float(treated_outcome.sum())
+            aipw_score_squared_sum += float(np.dot(treated_residual, treated_residual))
+            treated_feature_sum += treated_features.sum(axis=0)
+            treated_feature_squared_sum += np.square(treated_features).sum(axis=0)
+
+        control_mask = ~treated_mask
+        if control_mask.any():
+            control_features = features[control_mask]
+            control_outcome = outcome[control_mask]
+            control_residual = residual[control_mask]
+            raw_propensity = propensity[control_mask]
+            clipped_propensity = np.clip(
+                raw_propensity,
+                PROPENSITY_CLIP_EPSILON,
+                1.0 - PROPENSITY_CLIP_EPSILON,
+            )
+            weights = clipped_propensity / (1.0 - clipped_propensity)
+            count = len(control_outcome)
+            control_propensity[control_cursor : control_cursor + count] = raw_propensity
+            control_weights[control_cursor : control_cursor + count] = weights
+            control_cursor += count
+
+            control_weight_sum += float(weights.sum())
+            control_weight_squared_sum += float(np.dot(weights, weights))
+            control_weighted_outcome_sum += float(np.dot(weights, control_outcome))
+            control_weighted_residual_sum += float(np.dot(weights, control_residual))
+            weighted_control_residual = weights * control_residual
+            aipw_score_squared_sum += float(np.dot(weighted_control_residual, weighted_control_residual))
+            control_feature_sum += control_features.sum(axis=0)
+            control_feature_squared_sum += np.square(control_features).sum(axis=0)
+            weighted_control_feature_sum += weights @ control_features
+            weighted_control_feature_squared_sum += np.square(control_features).T @ weights
+
+    if treated_cursor != treated_count or control_cursor != control_count:
+        raise RuntimeError("Reference diagnostics did not align with treatment rows.")
+    if not np.isfinite(control_weight_sum) or control_weight_sum <= 0:
+        raise ValueError("Reference ATT propensity weights have an invalid total.")
+
+    aipw_att = (
+        treated_residual_sum - control_weighted_residual_sum
+    ) / treated_count
+    ipw_att = (
+        treated_outcome_sum / treated_count
+        - control_weighted_outcome_sum / control_weight_sum
+    )
+    outcome_regression_att = treated_residual_sum / treated_count
+
+    # Influence-function SE for the orthogonal ATT score, with nuisance fits
+    # estimated on the reference cohort. The ratio denominator is the treated n.
+    treated_score_sum = treated_residual_sum
+    influence_sum_squares = (
+        aipw_score_squared_sum
+        - 2.0 * aipw_att * treated_score_sum
+        + aipw_att * aipw_att * treated_count
+    )
+    aipw_se = float(np.sqrt(max(influence_sum_squares, 0.0)) / treated_count)
+
+    treated_mean = treated_feature_sum / treated_count
+    control_mean = control_feature_sum / control_count
+    treated_variance = np.maximum(
+        (treated_feature_squared_sum - treated_feature_sum * treated_mean)
+        / max(treated_count - 1, 1),
+        0.0,
+    )
+    control_variance = np.maximum(
+        (control_feature_squared_sum - control_feature_sum * control_mean)
+        / max(control_count - 1, 1),
+        0.0,
+    )
+    smd_before = _smd_from_moments(treated_mean, treated_variance, control_mean, control_variance)
+
+    weighted_control_mean = weighted_control_feature_sum / control_weight_sum
+    weighted_control_variance = np.maximum(
+        weighted_control_feature_squared_sum / control_weight_sum
+        - np.square(weighted_control_mean),
+        0.0,
+    )
+    smd_after = _smd_from_moments(
+        treated_mean, treated_variance, weighted_control_mean, weighted_control_variance
+    )
+
+    diagnostics: dict[str, Any] = {
+        "reference_aipw_att_g": float(aipw_att),
+        "reference_aipw_se_g": aipw_se,
+        "reference_aipw_ci_lower_g": float(aipw_att - 1.96 * aipw_se),
+        "reference_aipw_ci_upper_g": float(aipw_att + 1.96 * aipw_se),
+        "reference_ipw_att_g": float(ipw_att),
+        "reference_outcome_regression_att_g": float(outcome_regression_att),
+        "reference_aipw_max_abs_smd_before": float(np.max(smd_before)),
+        "reference_aipw_max_abs_smd_after": float(np.max(smd_after)),
+        "reference_aipw_weight_sum": float(control_weight_sum),
+        "reference_aipw_weight_mean": float(control_weight_sum / control_count),
+        "reference_aipw_weight_ess": float(
+            control_weight_sum * control_weight_sum / control_weight_squared_sum
+        ),
+        "reference_aipw_weight_clipped_n": int(
+            np.count_nonzero(
+                (control_propensity < PROPENSITY_CLIP_EPSILON)
+                | (control_propensity > 1.0 - PROPENSITY_CLIP_EPSILON)
+            )
+        ),
+        "reference_aipw_weight_clipping_epsilon": PROPENSITY_CLIP_EPSILON,
+        "reference_aipw_treated_outside_control_propensity_range_n": int(
+            np.count_nonzero(
+                (treated_propensity < control_propensity.min())
+                | (treated_propensity > control_propensity.max())
+            )
+        ),
+        "reference_aipw_control_outside_treated_propensity_range_n": int(
+            np.count_nonzero(
+                (control_propensity < treated_propensity.min())
+                | (control_propensity > treated_propensity.max())
+            )
+        ),
+    }
+    diagnostics.update(_quantile_diagnostics("reference_aipw_weight", control_weights))
+    diagnostics.update(_quantile_diagnostics("reference_aipw_treated_propensity", treated_propensity))
+    diagnostics.update(_quantile_diagnostics("reference_aipw_control_propensity", control_propensity))
+    diagnostics["reference_aipw_propensity_overlap_lower"] = float(
+        max(treated_propensity.min(), control_propensity.min())
+    )
+    diagnostics["reference_aipw_propensity_overlap_upper"] = float(
+        min(treated_propensity.max(), control_propensity.max())
+    )
+    for feature, before, after in zip(transform.feature_names, smd_before, smd_after):
+        diagnostics[f"reference_aipw_smd_before_{feature}"] = float(before)
+        diagnostics[f"reference_aipw_smd_after_{feature}"] = float(after)
+    return diagnostics
+
+
+def _smd_from_moments(
+    treated_mean: np.ndarray,
+    treated_variance: np.ndarray,
+    control_mean: np.ndarray,
+    control_variance: np.ndarray,
+) -> np.ndarray:
+    """Compute absolute standardized mean differences from group moments."""
+    pooled_sd = np.sqrt((treated_variance + control_variance) / 2.0)
+    differences = treated_mean - control_mean
+    result = np.zeros_like(differences, dtype=np.float64)
+    positive_scale = pooled_sd > 0
+    result[positive_scale] = np.abs(differences[positive_scale] / pooled_sd[positive_scale])
+    result[(~positive_scale) & (differences != 0)] = np.inf
+    return result
+
+
+def _attach_reference_estimands(
+    result: dict[str, Any],
+    reference_estimates: dict[str, Any],
+) -> dict[str, Any]:
+    """Attach the independent reference estimators and AIPW comparison error."""
+    result.update(reference_estimates)
+    result["error_vs_reference_aipw_g"] = (
+        float(result["test_att_g"]) - float(reference_estimates["reference_aipw_att_g"])
+    )
+    return result
 
 
 def _test_propensity_coordinates(
@@ -372,37 +572,43 @@ def run_experiment(
         test = data.iloc[test_indices]
         transform = fit_natality_transform(reference)
         test_features = transform.transform(test)
-        identity_weights = transform.diagonal_field_weights()
+        identity_matrix_weights = transform.diagonal_field_weights()
+
+        propensity_coefficients = _fit_reference_propensity(reference, transform)
+        control_outcome_coefficients = _fit_reference_control_outcome(reference, transform)
+        reference_estimates = _reference_aipw_estimates(
+            reference,
+            transform,
+            propensity_coefficients,
+            control_outcome_coefficients,
+        )
 
         identity = _match_one_method(
-            reference,
             test,
             transform,
-            identity_weights,
+            identity_matrix_weights,
             "identity_generalized_mahalanobis",
             split_number,
             test_features=test_features,
         )
+        identity = _attach_reference_estimands(identity, reference_estimates)
         identity["pilot_rows"] = pilot_rows
         identity["test_fraction"] = test_fraction
         result_rows.append(identity)
 
-        propensity_coefficients = _fit_reference_propensity(reference, transform)
         propensity_coordinates = _test_propensity_coordinates(
             test, transform, propensity_coefficients, test_features=test_features
         )
         psm = _match_one_method(
-            reference,
             test,
             transform,
             np.ones(len(transform.feature_names), dtype=np.float64),
             "propensity_score_logit",
             split_number,
-            reference_att=identity["reference_att_g"],
-            reference_att_se=identity["reference_att_cluster_se_g"],
             test_coordinates=propensity_coordinates,
             test_features=test_features,
         )
+        psm = _attach_reference_estimands(psm, reference_estimates)
         psm["pilot_rows"] = pilot_rows
         psm["test_fraction"] = test_fraction
         result_rows.append(psm)
@@ -410,32 +616,28 @@ def run_experiment(
         if weights is not None:
             llm_weights = transform.diagonal_field_weights(weights)
             llm = _match_one_method(
-                reference,
                 test,
                 transform,
                 llm_weights,
                 "llm_weighted_generalized_mahalanobis",
                 split_number,
-                reference_att=identity["reference_att_g"],
-                reference_att_se=identity["reference_att_cluster_se_g"],
                 test_features=test_features,
             )
+            llm = _attach_reference_estimands(llm, reference_estimates)
             llm["pilot_rows"] = pilot_rows
             llm["test_fraction"] = test_fraction
             result_rows.append(llm)
 
             sensitivity_weights = transform.column_normalized_field_weights(weights)
             sensitivity = _match_one_method(
-                reference,
                 test,
                 transform,
                 sensitivity_weights,
                 "llm_column_normalized_sensitivity",
                 split_number,
-                reference_att=identity["reference_att_g"],
-                reference_att_se=identity["reference_att_cluster_se_g"],
                 test_features=test_features,
             )
+            sensitivity = _attach_reference_estimands(sensitivity, reference_estimates)
             sensitivity["pilot_rows"] = pilot_rows
             sensitivity["test_fraction"] = test_fraction
             result_rows.append(sensitivity)
@@ -450,20 +652,41 @@ def run_experiment(
     print(f"Wrote matching results to {output_path}")
 
     results = pd.DataFrame(result_rows)
-    results["squared_reference_error_g2"] = results["reference_error_g"] ** 2
+    results["squared_error_vs_reference_aipw_g2"] = results["error_vs_reference_aipw_g"] ** 2
     summary = results.groupby("method", as_index=False).agg(
         splits=("split", "count"),
-        reference_error_mse_g2=("squared_reference_error_g2", "mean"),
+        error_vs_reference_aipw_mse_g2=("squared_error_vs_reference_aipw_g2", "mean"),
         mean_test_att_g=("test_att_g", "mean"),
-        mean_reference_att_cluster_se_g=("reference_att_cluster_se_g", "mean"),
+        mean_reference_aipw_att_g=("reference_aipw_att_g", "mean"),
+        mean_reference_aipw_se_g=("reference_aipw_se_g", "mean"),
+        mean_reference_aipw_ci_lower_g=("reference_aipw_ci_lower_g", "mean"),
+        mean_reference_aipw_ci_upper_g=("reference_aipw_ci_upper_g", "mean"),
+        mean_reference_ipw_att_g=("reference_ipw_att_g", "mean"),
+        mean_reference_outcome_regression_att_g=("reference_outcome_regression_att_g", "mean"),
         mean_test_att_cluster_se_g=("test_att_cluster_se_g", "mean"),
         mean_max_abs_smd_before=("max_abs_smd_before", "mean"),
         mean_max_abs_smd_after=("max_abs_smd_after", "mean"),
+        mean_reference_aipw_max_abs_smd_before=("reference_aipw_max_abs_smd_before", "mean"),
+        mean_reference_aipw_max_abs_smd_after=("reference_aipw_max_abs_smd_after", "mean"),
+        mean_reference_aipw_weight_median=("reference_aipw_weight_median", "mean"),
+        mean_reference_aipw_weight_p95=("reference_aipw_weight_p95", "mean"),
+        mean_reference_aipw_weight_p99=("reference_aipw_weight_p99", "mean"),
+        mean_reference_aipw_weight_max=("reference_aipw_weight_max", "mean"),
+        mean_reference_aipw_weight_ess=("reference_aipw_weight_ess", "mean"),
+        mean_reference_aipw_weight_clipped_n=("reference_aipw_weight_clipped_n", "mean"),
+        mean_reference_aipw_treated_propensity_p01=("reference_aipw_treated_propensity_p01", "mean"),
+        mean_reference_aipw_treated_propensity_p99=("reference_aipw_treated_propensity_p99", "mean"),
+        mean_reference_aipw_control_propensity_p01=("reference_aipw_control_propensity_p01", "mean"),
+        mean_reference_aipw_control_propensity_p99=("reference_aipw_control_propensity_p99", "mean"),
+        mean_reference_aipw_propensity_overlap_lower=("reference_aipw_propensity_overlap_lower", "mean"),
+        mean_reference_aipw_propensity_overlap_upper=("reference_aipw_propensity_overlap_upper", "mean"),
         mean_test_treated_n=("test_treated_n", "mean"),
         mean_test_unique_controls_n=("test_unique_controls_n", "mean"),
         mean_test_max_control_reuse=("test_max_control_reuse", "mean"),
     )
-    summary["reference_error_rmse_g"] = np.sqrt(summary["reference_error_mse_g2"])
+    summary["error_vs_reference_aipw_rmse_g"] = np.sqrt(
+        summary["error_vs_reference_aipw_mse_g2"]
+    )
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     summary.to_csv(summary_path, index=False)
     print(f"Wrote aggregate summary to {summary_path}")
