@@ -74,6 +74,6 @@
   or invalid values. `BWTR12` and `BWTR4` are categorical alternatives, not
   matching covariates.
 - The current cohort definitions and QC counts are in
-  [`analysis_protocol.md`](analysis_protocol.md) and
+  [`protocal_maternal_smoking_dataset.md`](protocal_maternal_smoking_dataset.md) and
   [`../../results/full_data_qc_summary.md`](../../results/full_data_qc_summary.md).
 

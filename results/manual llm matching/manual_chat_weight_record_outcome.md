@@ -12,7 +12,7 @@
   recorded as user-reported, not independently verifiable from this workspace.
 - Retries or manual edits: not reported.
 - Prompt: the standalone prompt in
-  [`../../docs/llm_matching/manual_chat_weight_prompt.md`](../../docs/llm_matching/manual_chat_weight_prompt.md).
+  [`../../docs/llm_matching/llm_prompt_covariate_weights.md`](../../docs/llm_matching/llm_prompt_covariate_weights.md).
 - Raw response: the ten-score JSON object recorded below; no prose was
   included in the response provided here.
 
@@ -33,13 +33,11 @@
 }
 ```
 
-The revised values are saved separately in
-[`manual_chat_weights_outcome_blind.json`](manual_chat_weights_outcome_blind.json).
+The elicited values are saved in
+[`manual_chat_weights_outcome.json`](manual_chat_weights_outcome.json).
 They satisfy the prompt's output checks: exactly ten required keys, integer
 scores from 0 through 10, and at least one positive score. They are relative
 scores and do not need to sum to 1. The matching code will rescale them to mean
 1 when constructing the field-weight matrix.
 
-Keep these scores and their results separate from the earlier exploratory
-weights in `manual_chat_weights.json`. Do not revise these scores in response
-to pilot or full-cohort metrics.
+Do not revise these scores in response to pilot or full-cohort metrics.

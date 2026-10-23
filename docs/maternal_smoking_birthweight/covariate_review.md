@@ -97,11 +97,11 @@ describe how the gestational estimate was constructed.
   spaced numeric values.
 - Use the fixed encoding, preprocessing, covariance estimation, and
   field-to-column weight mapping in the
-  [analysis protocol](analysis_protocol.md) for matching. That protocol is the
+  [analysis protocol](protocal_maternal_smoking_dataset.md) for matching. That protocol is the
   single source of truth for the 23-column design and generalized Mahalanobis
   distance.
 - Decide whether to add `DMAR` or other optional candidates in a sensitivity
   analysis after reviewing timing and missingness.
 - Exclude reporting flags from matching; use them to interpret item reporting.
 - The flag-aware missing-data rule and cohort eligibility are specified in the
-  [analysis protocol](analysis_protocol.md).
+  [analysis protocol](protocal_maternal_smoking_dataset.md).

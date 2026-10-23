@@ -7,7 +7,7 @@ and treatment-effect estimation compared with conventional matching methods.
 The current application is the 2024 CDC Natality study of maternal smoking
 during pregnancy and birth weight. Study-specific cohort and variable
 definitions are maintained in the
-[Natality analysis protocol](../maternal_smoking_birthweight/protocol_maternal_smoking_dataset.md).
+[Natality analysis protocol](../maternal_smoking_birthweight/protocal_maternal_smoking_dataset.md).
 ACIC 2016 is a possible future benchmark, outside the current scope.
 
 ## Research question
@@ -104,9 +104,9 @@ Apply the same covariate-weighting task and Natality design in three stages:
 1. **Manual chat-interface matching:** obtain covariate priorities in a new,
    isolated session using the
    [outcome-blind manual-chat protocol](manual_chat_weight_protocol.md) and
-   [standalone prompt](manual_chat_weight_prompt.md). Preserve earlier
-   weights that were elicited after pilot results as exploratory; do not mix
-   their results with the new blind-weight results.
+   [standalone prompt](llm_prompt_covariate_weights.md). Use the recorded
+   outcome-blind weights in the current project results and evaluate them
+   separately from DeepSeek weights.
 2. **DeepSeek API:** apply the same weighting task through the separate
    implementation in [`src/get_deepseek_weights.py`](../../src/get_deepseek_weights.py).
    Preserve its exact prompt, settings, returned weights, and API response in

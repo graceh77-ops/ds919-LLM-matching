@@ -2,12 +2,11 @@
 
 ## Status and scope
 
-This document records the current implementation and configuration. Historical
-matching outputs are preserved. The new AIPW implementation has been checked
-with the development pilot recorded below; no new full-cohort AIPW comparison
-has been run.
+This document records the current implementation and configuration. The AIPW
+implementation has been checked with the development pilot recorded below; no
+new full-cohort AIPW comparison has been run.
 The scope is the 2024 CDC Natality singleton cohort described in the
-[maternal smoking analysis protocol](../maternal_smoking_birthweight/analysis_protocol.md).
+[maternal smoking analysis protocol](../maternal_smoking_birthweight/protocal_maternal_smoking_dataset.md).
 
 ## Frozen shared configuration
 

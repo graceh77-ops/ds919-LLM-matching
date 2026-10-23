@@ -4,7 +4,7 @@
 
 This script requests one outcome-blind set of covariate-priority weights from
 DeepSeek. It sends only the text between the delimiters in
-[`llm_propt_covariate_weights.md`](llm_prompt_covariate_weights.md). It does 
+[`llm_prompt_covariate_weights.md`](llm_prompt_covariate_weights.md). It does
 not load the natality cohort, previous weights, matching outputs, or evaluation 
 metrics.
 

@@ -35,9 +35,9 @@ treatment and infant birth weight as the outcome.
 
 ## Start here
 
-- [LLM matching protocol](docs/llm_matching/llm_matching_protocol.md): staged
+- [LLM matching protocol](docs/llm_matching/protocol_LLM_matching.md): staged
   manual and API workflow, reference comparison, methods, and evaluation.
-- [Natality analysis protocol](docs/maternal_smoking_birthweight/analysis_protocol.md):
+- [Natality analysis protocol](docs/maternal_smoking_birthweight/protocal_maternal_smoking_dataset.md):
   study population, variables, matching distance, and analysis decisions.
 - [Covariate review](docs/maternal_smoking_birthweight/covariate_review.md):
   candidate variables, rationale, and coding decisions.
