@@ -16,31 +16,63 @@ Does LLM-generated covariate weighting improve matching performance compared wit
 
 ## Repeated 99% / 1% reference comparison
 
-For each of `R` repeated, outcome-blind, treatment-stratified random splits:
+For each of `R` repeated, treatment-stratified random splits:
 
 1. Assign 99% of eligible singleton births to a reference sample and 1% to a
    test sample, preserving treatment strata in the split. Use NumPy's seeded
    `default_rng` generator (PCG64); within each treatment group, round the 1%
    test count to the nearest integer (half-up) and sample without replacement.
-2. Apply identity-matrix generalized Mahalanobis matching, using the fixed
-   study-specific distance specification, to the 99% reference sample to
-   estimate the reference ATT.
+2. Fit the reference-cohort propensity and control outcome models using the
+   shared 23 encoded covariates. Calculate AIPW-ATT as the primary reference
+   estimate and calculate IPW-ATT and outcome-regression ATT as separate
+   reference sensitivities.
 3. Apply each candidate method separately to the same 1% test sample and
-   estimate its test-sample ATT using the fixed treatment, outcome, covariates,
-   estimand, eligibility rules, and matching rules.
-4. Record the test ATT, reference ATT, their difference, diagnostics, and
-   retained-treated count for every method and split.
+   estimate its test-sample ATT using the fixed treatment, outcome, 
+   covariates, estimand, eligibility rules, and matching rules.
+4. Record each method's test ATT, the AIPW/IPW/outcome-regression reference
+   estimates, diagnostics, and retained-treated count for every split.
 
-For method `m` and split `r`, define reference error as:
+### Reference estimator specifications
 
-`Error_(m,r) = ATT_test_(m,r) - ATT_reference_r`
+Let `A` indicate maternal smoking, `Y` be birth weight in grams, `e(X)` be the
+reference-fitted propensity score, and `m0(X)` be reference-fitted expected
+birth weight among nonsmokers. The primary AIPW estimate is:
 
-Report mean squared reference error and RMSE across the `R` splits. Lower
-values indicate closer agreement with the conventional reference estimator.
-This is a **pseudo-ground-truth** comparison, not evaluation against the true
-causal effect. The reference estimate can be biased or retain residual
-confounding; therefore, the results show agreement with the chosen reference
-procedure and do not establish causal accuracy.
+`ATT_AIPW = sum[A_i (Y_i - m0(X_i))] / n1 - sum[(1-A_i) w_i (Y_i - m0(X_i))] / n1`
+
+where `w_i = e(X_i) / (1 - e(X_i))` for controls and `n1` is the number of
+treated reference records. Propensity scores used to form odds weights are
+clipped to `[1e-6, 1 - 1e-6]` for numerical stability; raw scores are retained
+for overlap diagnostics. The propensity model is unpenalized logistic
+regression fitted on reference treatment and the shared encoded covariates.
+The control outcome model is unpenalized ordinary least squares for birth
+weight on an intercept and the same encoded covariates, fitted only among
+reference controls using incremental QR in memory-bounded chunks. This is a
+parametric, in-sample nuisance-model specification; no test outcomes are used.
+
+The IPW-ATT sensitivity estimate is the treated reference mean minus the
+propensity-odds-weighted control reference mean, normalized by the sum of
+control odds weights. The outcome-regression ATT sensitivity is the mean
+treated reference residual `Y - m0(X)`. None of the reference estimates is labeled as ground truth.
+
+For AIPW, report a robust influence-function standard error and a 95% Wald
+interval, along with propensity overlap, pre- and post-weighting SMDs, odds
+weight quantiles and maximum, the count affected by propensity clipping, and
+effective sample size `ESS = (sum w)^2 / sum(w^2)`. The weighted-control SMD
+uses odds weights normalized to sum to one for balance calculations.
+
+For test method `m` and split `r`, define error relative to the
+reference-cohort AIPW estimate as:
+
+`Error_AIPW_(m,r) = ATT_test_(m,r) - ATT_AIPW_reference_r`
+
+Report mean squared error and RMSE relative to the reference-cohort AIPW
+estimate across the `R` splits. Lower values indicate closer agreement with
+that estimate, not greater accuracy relative to the unknown true causal
+effect. Differences between the reference and test cohorts may contribute to
+this error. The AIPW reference may itself be biased or retain residual
+confounding. This remains a **pseudo-reference comparison**, not evaluation
+against the true causal effect.
 
 These repeated splits are **within-cohort resampling**: every split is drawn
 from the same eligible 2024 cohort, and records may appear in the test sample
@@ -75,14 +107,16 @@ Apply the same covariate-weighting task and Natality design in three stages:
    [standalone prompt](manual_chat_weight_prompt.md). Preserve earlier
    weights that were elicited after pilot results as exploratory; do not mix
    their results with the new blind-weight results.
-2. **DeepSeek API:** next implement the same weighting task through DeepSeek.
-3. **Advanced API:** then use the more advanced API/model to be identified
-   after discussion with the professor.
+2. **DeepSeek API:** apply the same weighting task through the separate
+   implementation in [`src/get_deepseek_weights.py`](../../src/get_deepseek_weights.py).
+   Preserve its exact prompt, settings, returned weights, and API response in
+   the timestamped run record; evaluate it separately from manual-chat weights.
+3. **Advanced API:** then use the more advanced API/model(to be identified).
 
 For every stage, give the LLM only the pre-specified covariate names,
 definitions, coding, research question, and relevant pre-treatment rationale
 needed to assign weights. Do not provide outcome values. The LLM assigns
-covariate priorities or weights.
+covariate weights.
 
 Request structured output that can be checked and applied reproducibly. Record
 the interface or model and version, exact prompt, settings, date, returned
@@ -105,7 +139,7 @@ specified outside the LLM.
 
 - **Identity-matrix unweighted matching:** generalized Mahalanobis distance
   with identity weight matrix (`V = I`) after the study-specific covariate
-  coding and scaling.
+  coding and scaling. Estimate its ATT in the test cohort.
 - **PCA-based matching:** match in the retained principal-component space.
   Document preprocessing, component-retention rule, and distance measure.
 
@@ -116,26 +150,9 @@ specified outside the LLM.
   and the 99% reference sample in each split. Apply the fitted model to the 1%
   test sample and match on the logit propensity score using 1:1 nearest-neighbor
   matching with replacement and no caliper. Resolve ties by the smallest
-  source record number. Use the identity method's reference ATT for the
-  reference-error calculation. Report balance using the same encoded columns
-  as the other methods. This is the initial PSM specification; do not tune it
-  using test outcomes.
-
-  **Specification history:** PSM as a comparator family was already listed
-  before its implementation. The detailed implementation above was finalized
-  on 2026-10-22, after the first full-cohort identity/LLM comparison had been
-  reviewed and before PSM results were generated. The exact time was not
-  recorded. Treat PSM results from this project phase as an exploratory
-  comparator informed by a later implementation refinement, not as a wholly
-  prespecified primary comparison. Its settings are now frozen for the
-  current configuration; do not tune them against test outcomes.
+  source record number. 
 - **Genetic matching:** use a genetic-matching procedure to select distance weights and apply the generalized Mahalanobis distance metric.
 
-The analysis protocol specifies the primary matching algorithm, distance,
-covariate preprocessing, scaling, tie handling, and reference estimator.
-Specify settings needed by each additional comparator before final comparisons.
-Keep shared settings fixed across methods wherever possible so the comparison
-isolates the weighting approach.
 
 ## Evaluation and reporting
 
@@ -146,6 +163,12 @@ For every method and split, report:
 - Number and proportion of treated births retained or matched.
 - Sensitivity of balance and retention to prespecified matching settings and
   covariate weights.
+- Reference-cohort AIPW-ATT, its influence-function standard error and 95%
+  interval, IPW-ATT, and outcome-regression ATT as separately named estimates.
+- Test-sample ATT for each matching comparator, including identity-matrix
+  generalized Mahalanobis, PSM, and the LLM-weighted methods.
+- Reference AIPW propensity-score quantiles and overlap, weighted SMDs, odds
+  weight quantiles and maximum, clipping count, and effective sample size.
 
 Report ATT uncertainty alongside the reference-error metrics defined above.
 For the initial matched ATT, estimate uncertainty with a control-clustered
