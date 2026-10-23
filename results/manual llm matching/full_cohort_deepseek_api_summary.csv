@@ -1,0 +1,5 @@
+method,splits,mean_test_att_g,mean_test_att_cluster_se_g,mean_max_abs_smd_before,mean_max_abs_smd_after,mean_test_treated_n,mean_test_unique_controls_n,mean_test_max_control_reuse
+identity_generalized_mahalanobis,1,-289.26070528967256,44.03988903367708,4.006336147270666,0.5344342620561641,794.0,196.0,22.0
+llm_column_normalized_sensitivity,1,-309.1801007556675,45.60252363716093,4.006336147270666,0.2862284283099848,794.0,200.0,19.0
+llm_weighted_generalized_mahalanobis,1,-271.54911838790935,46.05440483897943,4.006336147270666,0.5243102384656785,794.0,195.0,19.0
+propensity_score_logit,1,-194.41561712846348,70.38564006102101,4.006336147270666,0.303421136691386,794.0,184.0,40.0
