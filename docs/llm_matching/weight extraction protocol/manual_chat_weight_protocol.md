@@ -10,10 +10,8 @@ specifies the elicitation procedure; the prompt itself is kept separately in
 ## Isolated elicitation
 
 1. Start a new LLM session with no prior conversation history, uploaded files,
-   or project artifacts.
-2. Paste the standalone prompt verbatim. Do not add pilot results, ATT
-   estimates, reference-error metrics, balance results, comparator results,
-   previous weights, or commentary about how any method performed.
+   or project details.
+2. Paste the standalone prompt verbatim. Do not add any other information.
 3. Save the provider, model/version if shown, date/time, exact prompt, raw
    response, and any retries. If a format correction is necessary, repeat only
    the original prompt and a neutral request to return valid JSON in the
