@@ -36,7 +36,7 @@ metrics.
    model, set `DEEPSEEK_MODEL` before running.
 4. Keep the terminal open until it reports success or an error. A successful
    run writes a timestamped folder under
-   `results/manual llm matching/deepseek_api/` with the validated weights, raw
+  `results/matching results/deepseek_api/` with the validated weights, raw
    API response, raw model text, exact prompt, and request metadata.
 5. Review the saved record and weights before using them in matching. Do not
    change the scores manually. If the response fails validation, the raw output

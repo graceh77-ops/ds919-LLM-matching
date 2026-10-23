@@ -16,8 +16,14 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PROMPT_PATH = ROOT / "docs" / "llm_matching" / "llm_prompt_covariate_weights.md"
-OUTPUT_ROOT = ROOT / "results" / "manual llm matching" / "deepseek_api"
+PROMPT_PATH = (
+    ROOT
+    / "docs"
+    / "llm_matching"
+    / "weight extraction protocol"
+    / "llm_prompt_covariate_weights.md"
+)
+OUTPUT_ROOT = ROOT / "results" / "matching results" / "deepseek_api"
 API_URL = "https://api.deepseek.com/chat/completions"
 EXPECTED_KEYS = {
     "MAGER",

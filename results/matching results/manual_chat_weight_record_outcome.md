@@ -12,7 +12,7 @@
   recorded as user-reported, not independently verifiable from this workspace.
 - Retries or manual edits: not reported.
 - Prompt: the standalone prompt in
-  [`../../docs/llm_matching/llm_prompt_covariate_weights.md`](../../docs/llm_matching/llm_prompt_covariate_weights.md).
+  [`../../docs/llm_matching/weight extraction protocol/llm_prompt_covariate_weights.md`](../../docs/llm_matching/weight%20extraction%20protocol/llm_prompt_covariate_weights.md).
 - Raw response: the ten-score JSON object recorded below; no prose was
   included in the response provided here.
 

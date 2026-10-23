@@ -37,6 +37,9 @@ treatment and infant birth weight as the outcome.
 
 - [LLM matching protocol](docs/llm_matching/protocol_LLM_matching.md): staged
   manual and API workflow, reference comparison, methods, and evaluation.
+- [Manual-chat weight protocol](docs/llm_matching/weight%20extraction%20protocol/manual_chat_weight_protocol.md)
+  and [DeepSeek API setup](docs/llm_matching/weight%20extraction%20protocol/deepseek_api_setup.md):
+  outcome-blind weight elicitation steps.
 - [Natality analysis protocol](docs/maternal_smoking_birthweight/protocal_maternal_smoking_dataset.md):
   study population, variables, matching distance, and analysis decisions.
 - [Covariate review](docs/maternal_smoking_birthweight/covariate_review.md):

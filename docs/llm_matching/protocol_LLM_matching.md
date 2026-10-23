@@ -103,8 +103,9 @@ Apply the same covariate-weighting task and Natality design in three stages:
 
 1. **Manual chat-interface matching:** obtain covariate priorities in a new,
    isolated session using the
-   [outcome-blind manual-chat protocol](manual_chat_weight_protocol.md) and
-   [standalone prompt](llm_prompt_covariate_weights.md). Use the recorded
+   [outcome-blind manual-chat protocol](weight%20extraction%20protocol/manual_chat_weight_protocol.md)
+   and [standalone prompt](weight%20extraction%20protocol/llm_prompt_covariate_weights.md).
+   Use the recorded
    outcome-blind weights in the current project results and evaluate them
    separately from DeepSeek weights.
 2. **DeepSeek API:** apply the same weighting task through the separate

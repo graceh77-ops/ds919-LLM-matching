@@ -20,9 +20,9 @@ specifies the elicitation procedure; the prompt itself is kept separately in
    field names, integer values from 0 through 10, and at least one positive
    value. Do not alter individual scores manually.
 5. Save the validated scores in
-   `results/manual llm matching/manual_chat_weights_outcome.json`. Save the
+   `results/matching results/manual_chat_weights_outcome.json`. Save the
    elicitation record in
-   `results/manual llm matching/manual_chat_weight_record_outcome.md`.
+   `results/matching results/manual_chat_weight_record_outcome.md`.
 6. Freeze the new weights before running any matching evaluation. Do not revise
    them using pilot or test ATT, reference error, SMD, or comparator results.
 
