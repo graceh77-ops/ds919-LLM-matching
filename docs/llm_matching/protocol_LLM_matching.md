@@ -22,13 +22,13 @@ For each of `R` repeated, treatment-stratified random splits:
    test sample, preserving treatment strata in the split. Use NumPy's seeded
    `default_rng` generator (PCG64); within each treatment group, round the 1%
    test count to the nearest integer (half-up) and sample without replacement.
-2. Fit the reference-cohort propensity and control outcome models using the
-   shared 23 encoded covariates. Calculate AIPW-ATT as the primary reference
-   estimate and calculate IPW-ATT and outcome-regression ATT as separate
-   reference sensitivities.
-3. Apply each candidate method separately to the same 1% test sample and
-   estimate its test-sample ATT using the fixed treatment, outcome, 
-   covariates, estimand, eligibility rules, and matching rules.
+2. Fit the reference-cohort propensity and control outcome models using a
+   reference-fitted representation of the shared 23 encoded covariates.
+   Calculate AIPW-ATT as the primary reference estimate and calculate IPW-ATT
+   and outcome-regression ATT as separate reference sensitivities.
+3. Fit matching-side preprocessing and any treatment model using only the 1%
+   test sample's covariates and treatment. Apply each candidate method to that
+   same test sample and estimate its test-sample ATT.
 4. Record each method's test ATT, the AIPW/IPW/outcome-regression reference
    estimates, diagnostics, and retained-treated count for every split.
 
@@ -147,11 +147,11 @@ specified outside the LLM.
 ### Additional comparators
 
 - **Propensity-score matching:** fit an unpenalized logistic regression for
-  treatment using the same 23 encoded covariate columns, fitted preprocessing,
-  and the 99% reference sample in each split. Apply the fitted model to the 1%
-  test sample and match on the logit propensity score using 1:1 nearest-neighbor
-  matching with replacement and no caliper. Resolve ties by the smallest
-  source record number. 
+  treatment using the 23 encoded covariates, preprocessing, treatment, and
+  records in the 1% test sample in each split. Match those same test records on
+  their fitted logit propensity scores using 1:1 nearest-neighbor matching
+  with replacement and no caliper. Resolve ties by the smallest source record
+  number.
 - **Genetic matching:** use a genetic-matching procedure to select distance weights and apply the generalized Mahalanobis distance metric.
 
 

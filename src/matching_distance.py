@@ -1,8 +1,8 @@
 """Feature preparation and distance transforms for Natality matching.
 
 The feature coding is fixed from the maternal smoking analysis protocol.
-Fit preprocessing and covariance on the reference sample, then reuse the
-resulting object to transform the reference and test samples consistently.
+Callers fit preprocessing and covariance on the cohort specified for that
+task, then reuse the resulting object to transform its rows consistently.
 """
 
 from __future__ import annotations
@@ -89,7 +89,7 @@ def _categorical_values(field: str, values: pd.Series) -> pd.Series:
 
 @dataclass(frozen=True)
 class NatalityFeatureTransform:
-    """Reference-fitted feature coding, centering, scaling, and covariance."""
+    """Cohort-fitted feature coding, centering, scaling, and covariance."""
 
     numeric_means: Mapping[str, float]
     numeric_scales: Mapping[str, float]
@@ -102,7 +102,7 @@ class NatalityFeatureTransform:
     feature_names: tuple[str, ...]
 
     def transform(self, data: pd.DataFrame) -> np.ndarray:
-        """Encode a cohort using only preprocessing values fitted on reference."""
+        """Encode rows using this transform's fitted preprocessing values."""
         blocks: list[np.ndarray] = []
 
         for field in FIELD_ORDER:
@@ -285,14 +285,14 @@ def estimate_att(
     return float(np.mean(treated_outcomes - control_outcomes[match.control_indices]))
 
 
-def fit_natality_transform(reference: pd.DataFrame) -> NatalityFeatureTransform:
-    """Fit fixed 23-column encoding and covariance using reference records."""
+def fit_natality_transform(cohort: pd.DataFrame) -> NatalityFeatureTransform:
+    """Fit fixed 23-column encoding and covariance using cohort records."""
     required = set(FIELD_ORDER)
-    missing = required - set(reference.columns)
+    missing = required - set(cohort.columns)
     if missing:
         raise ValueError(f"Missing required covariate columns: {sorted(missing)}")
-    if reference.empty:
-        raise ValueError("The reference sample is empty.")
+    if cohort.empty:
+        raise ValueError("The cohort used to fit preprocessing is empty.")
 
     numeric_means: dict[str, float] = {}
     numeric_scales: dict[str, float] = {}
@@ -305,18 +305,18 @@ def fit_natality_transform(reference: pd.DataFrame) -> NatalityFeatureTransform:
 
     for field in FIELD_ORDER:
         if field in NUMERIC_FIELDS:
-            values = pd.to_numeric(reference[field], errors="raise").to_numpy(dtype=np.float64)
+            values = pd.to_numeric(cohort[field], errors="raise").to_numpy(dtype=np.float64)
             mean = float(values.mean())
             scale = float(values.std(ddof=0))
             if not np.isfinite(scale) or scale <= 0:
-                raise ValueError(f"Reference-sample standard deviation is zero for {field}.")
+                raise ValueError(f"Fitting-cohort standard deviation is zero for {field}.")
             numeric_means[field] = mean
             numeric_scales[field] = scale
             columns.append(((values - mean) / scale)[:, None])
             names = [field]
         elif field in CATEGORICAL_FIELDS:
             levels = CATEGORY_LEVELS[field]
-            values = _categorical_values(field, reference[field])
+            values = _categorical_values(field, cohort[field])
             level_to_index = {level: index for index, level in enumerate(levels)}
             indices = values.map(level_to_index)
             if indices.isna().any():
@@ -330,7 +330,7 @@ def fit_natality_transform(reference: pd.DataFrame) -> NatalityFeatureTransform:
             names = [f"{field}_helmert_{index + 1}" for index in range(len(levels) - 1)]
         else:
             levels = BINARY_LEVELS[field]
-            values = _clean_strings(reference[field])
+            values = _clean_strings(cohort[field])
             if not values.isin(levels).all():
                 invalid = sorted(values[~values.isin(levels)].dropna().unique().tolist())
                 raise ValueError(f"Unrecognized {field} categories: {invalid}")
@@ -349,7 +349,7 @@ def fit_natality_transform(reference: pd.DataFrame) -> NatalityFeatureTransform:
     eigenvalues, eigenvectors = np.linalg.eigh(covariance)
     largest = float(eigenvalues[-1])
     if not np.isfinite(largest) or largest <= 0:
-        raise ValueError("Reference covariance has no positive finite eigenvalues.")
+        raise ValueError("Fitting-cohort covariance has no positive finite eigenvalues.")
     floor = largest * COVARIANCE_EIGENVALUE_FLOOR_RATIO
     eigenvalues = np.maximum(eigenvalues, floor)
     regularized_covariance = (eigenvectors * eigenvalues) @ eigenvectors.T

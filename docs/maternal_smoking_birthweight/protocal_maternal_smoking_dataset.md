@@ -88,8 +88,9 @@ effect of maternal smoking during pregnancy on birth weight?
   metrics are specified in the
   [LLM matching protocol](../llm_matching/protocol_LLM_matching.md).
 - Include an initial propensity-score comparator: fit an unpenalized logistic
-  treatment model on the 99% reference portion using the same encoded
-  covariates, then match test births on the fitted logit propensity score.
+  treatment model using only treatment and covariates from the 1% test portion,
+  then match those test births on the fitted logit propensity score. Do not use
+  test outcomes to fit the model or select matches.
   Model and matching details are specified in the
   [LLM matching protocol](../llm_matching/protocol_LLM_matching.md).
 
@@ -135,15 +136,16 @@ effect of maternal smoking during pregnancy on birth weight?
   (code 3), and heavy (codes 4-5), as specified in
   [`covariate_review.md`](covariate_review.md). This table also defines the
   field-to-column mapping used to construct `V`.
-- Within each split, calculate numeric means and standard deviations and
-  categorical-contrast means from the 99% reference portion. Use these same
-  preprocessing values and encoded columns for the reference and 1% test
-  estimates across all methods. Use the population standard deviation
-  (`ddof = 0`) for numeric scaling and do not standardize categorical contrast
-  columns separately.
-- Estimate the full covariance matrix `S` from the preprocessed 99% reference
+- Within each split, fit matching-side numeric means and standard deviations
+  and categorical-contrast means using only the 1% test portion. Apply this
+  test-fitted encoding and scaling consistently across all matching
+  comparators in that split. Use the population standard deviation (`ddof = 0`)
+  for numeric scaling and do not standardize categorical contrast columns
+  separately. Keep this separate from the reference-fitted representation
+  used for AIPW, IPW, and outcome-regression reference calculations.
+- Estimate the full covariance matrix `S` from the preprocessed 1% test
   portion using the sample covariance (`ddof = 1`) and keep it fixed across
-  methods in that split. For the inverse square root, floor eigenvalues below
+  generalized Mahalanobis methods in that split. For the inverse square root, floor eigenvalues below
   `1e-8` times the largest eigenvalue to that threshold. Apply this same rule
   across methods and do not select its parameter based on test outcomes.
 - Use the full-covariance generalized Mahalanobis distance

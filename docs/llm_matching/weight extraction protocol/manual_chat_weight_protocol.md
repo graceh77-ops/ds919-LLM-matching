@@ -34,7 +34,8 @@ isolated session. Do not use matching results to resolve ambiguity.
 
 The new weights change only the LLM-assigned field priorities. Keep the
 generalized Mahalanobis formula, cohort definition, covariate encoding,
-reference-fitted preprocessing and covariance, eigenvalue floor, split
-procedure, matching ratio, replacement rule, caliper setting, and evaluation
-metrics fixed as documented in the analysis and LLM matching protocols.
+test-sample-fitted matching preprocessing and covariance, eigenvalue floor,
+split procedure, matching ratio, replacement rule, caliper setting, and
+evaluation metrics fixed as documented in the analysis and LLM matching
+protocols. 
 Evaluate the new weights only after the scores and their provenance are saved.

@@ -94,6 +94,7 @@ def _match_one_method(
         raise ValueError("Test portion must contain treated and control records.")
 
     test_treated_mask = test["treatment_binary"].to_numpy() == 1
+    test_control_mask = ~test_treated_mask
     if test_features is None:
         test_treated_features = transform.transform(test_treated)
         test_control_features = transform.transform(test_controls)
@@ -146,8 +147,8 @@ def _match_one_method(
     return result
 
 
-def _fit_reference_propensity(
-    reference: pd.DataFrame,
+def _fit_propensity_model(
+    cohort: pd.DataFrame,
     transform: Any,
     chunk_size: int = 100_000,
 ) -> np.ndarray:
@@ -155,16 +156,16 @@ def _fit_reference_propensity(
 
     Returns the coefficients for an intercept followed by the shared encoded
     covariate columns. The fitting objective and gradient are accumulated over
-    chunks so the full reference design matrix need not remain in memory.
+    chunks so the full cohort design matrix need not remain in memory.
     """
-    treatment = reference["treatment_binary"].to_numpy(dtype=np.float64)
+    treatment = cohort["treatment_binary"].to_numpy(dtype=np.float64)
     treated_fraction = float(treatment.mean())
     if not 0.0 < treated_fraction < 1.0:
-        raise ValueError("Reference sample must contain both treatment groups for PSM.")
+        raise ValueError("Propensity-model cohort must contain both treatment groups.")
 
     initial = np.zeros(len(transform.feature_names) + 1, dtype=np.float64)
     initial[0] = np.log(treated_fraction / (1.0 - treated_fraction))
-    row_count = len(reference)
+    row_count = len(cohort)
 
     def objective_and_gradient(coefficients: np.ndarray) -> tuple[float, np.ndarray]:
         intercept = coefficients[0]
@@ -173,7 +174,7 @@ def _fit_reference_propensity(
         total_gradient = np.zeros_like(coefficients)
         for start in range(0, row_count, chunk_size):
             stop = min(start + chunk_size, row_count)
-            rows = reference.iloc[start:stop]
+            rows = cohort.iloc[start:stop]
             features = transform.transform(rows)
             y = treatment[start:stop]
             linear_predictor = intercept + features @ feature_coefficients
@@ -193,7 +194,7 @@ def _fit_reference_propensity(
         options={"maxiter": 100, "ftol": 1e-10},
     )
     if not fit.success:
-        raise RuntimeError(f"Reference propensity model did not converge: {fit.message}")
+        raise RuntimeError(f"Propensity model did not converge: {fit.message}")
     return np.asarray(fit.x, dtype=np.float64)
 
 
@@ -570,22 +571,29 @@ def run_experiment(
         )
         reference = data.iloc[reference_indices]
         test = data.iloc[test_indices]
-        transform = fit_natality_transform(reference)
-        test_features = transform.transform(test)
-        identity_matrix_weights = transform.diagonal_field_weights()
+        # Matching-side preprocessing is learned only from the 1% test cohort.
+        # Reference-side preprocessing is kept separate for the AIPW benchmark.
+        matching_transform = fit_natality_transform(test)
+        test_features = matching_transform.transform(test)
+        identity_matrix_weights = matching_transform.diagonal_field_weights()
+        reference_transform = fit_natality_transform(reference)
 
-        propensity_coefficients = _fit_reference_propensity(reference, transform)
-        control_outcome_coefficients = _fit_reference_control_outcome(reference, transform)
+        reference_propensity_coefficients = _fit_propensity_model(
+            reference, reference_transform
+        )
+        control_outcome_coefficients = _fit_reference_control_outcome(
+            reference, reference_transform
+        )
         reference_estimates = _reference_aipw_estimates(
             reference,
-            transform,
-            propensity_coefficients,
+            reference_transform,
+            reference_propensity_coefficients,
             control_outcome_coefficients,
         )
 
         identity = _match_one_method(
             test,
-            transform,
+            matching_transform,
             identity_matrix_weights,
             "identity_generalized_mahalanobis",
             split_number,
@@ -596,13 +604,19 @@ def run_experiment(
         identity["test_fraction"] = test_fraction
         result_rows.append(identity)
 
+        matching_propensity_coefficients = _fit_propensity_model(
+            test, matching_transform
+        )
         propensity_coordinates = _test_propensity_coordinates(
-            test, transform, propensity_coefficients, test_features=test_features
+            test,
+            matching_transform,
+            matching_propensity_coefficients,
+            test_features=test_features,
         )
         psm = _match_one_method(
             test,
-            transform,
-            np.ones(len(transform.feature_names), dtype=np.float64),
+            matching_transform,
+            np.ones(len(matching_transform.feature_names), dtype=np.float64),
             "propensity_score_logit",
             split_number,
             test_coordinates=propensity_coordinates,
@@ -614,10 +628,10 @@ def run_experiment(
         result_rows.append(psm)
 
         if weights is not None:
-            llm_weights = transform.diagonal_field_weights(weights)
+            llm_weights = matching_transform.diagonal_field_weights(weights)
             llm = _match_one_method(
                 test,
-                transform,
+                matching_transform,
                 llm_weights,
                 "llm_weighted_generalized_mahalanobis",
                 split_number,
@@ -628,10 +642,10 @@ def run_experiment(
             llm["test_fraction"] = test_fraction
             result_rows.append(llm)
 
-            sensitivity_weights = transform.column_normalized_field_weights(weights)
+            sensitivity_weights = matching_transform.column_normalized_field_weights(weights)
             sensitivity = _match_one_method(
                 test,
-                transform,
+                matching_transform,
                 sensitivity_weights,
                 "llm_column_normalized_sensitivity",
                 split_number,

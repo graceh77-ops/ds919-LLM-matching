@@ -22,8 +22,10 @@ treatment and infant birth weight as the outcome.
    interface, then use DeepSeek, and later use an advanced API/model. The LLM 
    provides weights; the analysis design and matching rules are set separately.
 4. **Compare matching approaches.** Apply LLM weights and conventional
-   comparators to the same cohort and preprocessing, then assess effect
-   estimates alongside balance and overlap diagnostics.
+   comparators within each 1% test sample. Fit matching preprocessing,
+   Mahalanobis covariance, and propensity scores from that test sample's
+   covariates and treatment only; use its birth weights only after matching to
+   estimate effects.
 5. **Evaluate against the reference estimate.** Use repeated,
    treatment-stratified 99% reference / 1% test splits. Report error relative
    to the reference-cohort AIPW-ATT estimate, not as error against the unknown
