@@ -93,6 +93,17 @@ effect of maternal smoking during pregnancy on birth weight?
   test outcomes to fit the model or select matches.
   Model and matching details are specified in the
   [LLM matching protocol](../llm_matching/protocol_LLM_matching.md).
+- Include PCA Mahalanobis matching as a comparator: use the fixed 23 encoded
+  covariate columns, standardize them on the pooled 1% test cohort, retain the
+  minimum number of principal components reaching 90% cumulative explained
+  variance, and match by ordinary Mahalanobis distance on the retained scores.
+  Fit all PCA parameters on test covariates only and do not add another
+  explained-variance weight to the distance.
+- For every matching method, report signed SMDs for numeric and binary source
+  covariates and proportion SMDs for every level of each categorical source
+  covariate, with the maximum absolute level SMD per categorical covariate.
+  Do not interpret encoded contrast columns as separate covariates. The run
+  writes a machine-readable encoded-column-to-source-covariate map.
 
 ## Covariates
 
@@ -119,18 +130,18 @@ effect of maternal smoking during pregnancy on birth weight?
   binary contrast column each. With one column each for standardized `MAGER`,
   `PRIORLIVE`, and `PRIORDEAD`, the design has 23 columns.
 
-  | Original field | Encoding | Columns (`q_j`) |
-  |---|---|---:|
-  | `MAGER` | Standardized numeric | 1 |
-  | `MRACEHISP` | Seven recognized levels, Helmert contrasts | 6 |
-  | `MEDUC` | Four grouped levels (1-2, 3-4, 5-6, 7-8), Helmert contrasts | 3 |
-  | `CIG0_R` | Four grouped levels, Helmert contrasts | 3 |
-  | `PRIORLIVE` | Standardized numeric | 1 |
-  | `PRIORDEAD` | Standardized numeric | 1 |
-  | `BMI_R` | Six recognized levels, Helmert contrasts | 5 |
-  | `RF_PDIAB` | Binary contrast | 1 |
-  | `RF_PHYPE` | Binary contrast | 1 |
-  | `SEX` | Binary contrast | 1 |
+  | Original field | Encoding | Encoded columns | Count |
+  |---|---|---|---:|
+  | `MAGER` | Standardized numeric | `MAGER` | 1 |
+  | `MRACEHISP` | Seven recognized levels, Helmert contrasts | `MRACEHISP_helmert_1`–`MRACEHISP_helmert_6` | 6 |
+  | `MEDUC` | Four grouped levels, Helmert contrasts | `MEDUC_helmert_1`–`MEDUC_helmert_3` | 3 |
+  | `CIG0_R` | Four grouped levels, Helmert contrasts | `CIG0_R_helmert_1`–`CIG0_R_helmert_3` | 3 |
+  | `PRIORLIVE` | Standardized numeric | `PRIORLIVE` | 1 |
+  | `PRIORDEAD` | Standardized numeric | `PRIORDEAD` | 1 |
+  | `BMI_R` | Six recognized levels, Helmert contrasts | `BMI_R_helmert_1`–`BMI_R_helmert_5` | 5 |
+  | `RF_PDIAB` | Binary contrast | `RF_PDIAB_contrast` | 1 |
+  | `RF_PHYPE` | Binary contrast | `RF_PHYPE_contrast` | 1 |
+  | `SEX` | Binary contrast | `SEX_contrast` | 1 |
 
   The grouped `CIG0_R` levels are nonsmoker (0), light (codes 1-2), moderate
   (code 3), and heavy (codes 4-5), as specified in
@@ -161,6 +172,14 @@ effect of maternal smoking during pregnancy on birth weight?
   encoded columns in its block before assigning the corresponding diagonal
   entries of `V`. Keep encoding, preprocessing, and `S` unchanged for this
   comparison.
+- For PCA matching, z-standardize each of the 23 encoded columns using the
+  pooled 1% test cohort's column means and population standard deviations
+  (`ddof = 0`); use scale 1 for a constant encoded column. Fit PCA by SVD on
+  this standardized test matrix, retaining the smallest component count whose
+  cumulative explained-variance ratio is at least 0.90. Compute ordinary
+  Mahalanobis distance using the retained PC-score covariance (with the same
+  relative `1e-8` eigenvalue floor for numerical stability). Do not multiply
+  the PC scores or distances by a further explained-variance weight.
 - For distance ties within `1e-12 * max(1, distance)`, select the eligible
   control with the smallest source `record_number`. Allow control reuse and
   apply no caliper in the initial 1:1 nearest-neighbor analysis.

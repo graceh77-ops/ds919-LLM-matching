@@ -14,10 +14,16 @@ from scipy.optimize import minimize
 from scipy.special import expit
 
 from matching_distance import (
+    BINARY_FIELDS,
+    BINARY_LEVELS,
+    CATEGORICAL_FIELDS,
+    CATEGORY_LEVELS,
     FIELD_ORDER,
+    NUMERIC_FIELDS,
     estimate_att,
     fit_natality_transform,
     nearest_neighbor_with_replacement,
+    normalize_categorical_values,
 )
 
 
@@ -26,6 +32,7 @@ DEFAULT_INPUT = PROJECT_ROOT / "data" / "processed" / "2024" / "analysis_cohort_
 DEFAULT_OUTPUT = PROJECT_ROOT / "results" / "matching_experiment.csv"
 DEFAULT_SUMMARY_OUTPUT = PROJECT_ROOT / "results" / "matching_experiment_summary.csv"
 DEFAULT_TEST_FRACTION = 0.01
+PCA_CUMULATIVE_VARIANCE_THRESHOLD = 0.90
 REFERENCE_MODEL_CHUNK_SIZE = 100_000
 PROPENSITY_CLIP_EPSILON = 1e-6
 
@@ -86,6 +93,7 @@ def _match_one_method(
     split_number: int,
     test_coordinates: tuple[np.ndarray, np.ndarray] | None = None,
     test_features: np.ndarray | None = None,
+    method_diagnostics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Estimate the method's matched ATT in the test portion only."""
     test_treated = test.loc[test["treatment_binary"] == 1]
@@ -122,10 +130,11 @@ def _match_one_method(
     differences = test_treated_outcomes - test_control_outcomes[test_match.control_indices]
     test_se = _cluster_robust_se(differences, test_match.control_indices)
     test_reuse_counts = np.bincount(test_match.control_indices)
-    smd_before = _absolute_smds(test_treated_features, test_control_features)
-    smd_after = _absolute_smds(
-        test_treated_features,
-        test_control_features[test_match.control_indices],
+    balance_before = _covariate_balance_smds(test_treated, test_controls)
+    matched_controls = test_controls.iloc[test_match.control_indices]
+    balance_after = _covariate_balance_smds(
+        test_treated,
+        matched_controls,
     )
 
     result = {
@@ -138,12 +147,23 @@ def _match_one_method(
         "test_max_control_reuse": int(test_reuse_counts.max()),
         "test_distance_median": float(np.median(test_match.distances)),
         "test_distance_p90": float(np.quantile(test_match.distances, 0.90)),
-        "max_abs_smd_before": float(np.max(smd_before)),
-        "max_abs_smd_after": float(np.max(smd_after)),
+        "max_abs_smd_before": balance_before["max_abs_smd"],
+        "max_abs_smd_after": balance_after["max_abs_smd"],
+        "pca_components_n": np.nan,
+        "pca_cumulative_variance": np.nan,
     }
-    for feature, before, after in zip(transform.feature_names, smd_before, smd_after):
-        result[f"smd_before_{feature}"] = float(before)
-        result[f"smd_after_{feature}"] = float(after)
+    for field, value in balance_before.items():
+        if field.startswith("max_abs_smd_"):
+            result[f"max_abs_smd_before_{field.removeprefix('max_abs_smd_')}"] = value
+        elif field != "max_abs_smd":
+            result[f"smd_before_{field}"] = value
+    for field, value in balance_after.items():
+        if field.startswith("max_abs_smd_"):
+            result[f"max_abs_smd_after_{field.removeprefix('max_abs_smd_')}"] = value
+        elif field != "max_abs_smd":
+            result[f"smd_after_{field}"] = value
+    if method_diagnostics:
+        result.update(method_diagnostics)
     return result
 
 
@@ -482,23 +502,147 @@ def _test_propensity_coordinates(
     return treated_scores[:, None], control_scores[:, None]
 
 
-def _absolute_smds(treated: np.ndarray, controls: np.ndarray) -> np.ndarray:
-    """Compute absolute pooled-SD standardized differences by encoded feature."""
-    if treated.ndim != 2 or controls.ndim != 2 or treated.shape[1] != controls.shape[1]:
-        raise ValueError("SMD inputs must be two-dimensional with equal feature counts.")
-    mean_difference = treated.mean(axis=0) - controls.mean(axis=0)
-    if len(treated) > 1 and len(controls) > 1:
-        treated_variance = treated.var(axis=0, ddof=1)
-        control_variance = controls.var(axis=0, ddof=1)
-        pooled_sd = np.sqrt((treated_variance + control_variance) / 2.0)
-    else:
-        pooled_sd = np.zeros(treated.shape[1], dtype=np.float64)
-    smd = np.zeros_like(mean_difference, dtype=np.float64)
-    positive_scale = pooled_sd > 0
-    smd[positive_scale] = mean_difference[positive_scale] / pooled_sd[positive_scale]
-    zero_scale_difference = (~positive_scale) & (mean_difference != 0)
-    smd[zero_scale_difference] = np.inf
-    return np.abs(smd)
+def _signed_numeric_smd(treated: np.ndarray, controls: np.ndarray) -> float:
+    """Return a signed pooled-sample-SD standardized mean difference."""
+    treated_variance = float(np.var(treated, ddof=1)) if len(treated) > 1 else 0.0
+    control_variance = float(np.var(controls, ddof=1)) if len(controls) > 1 else 0.0
+    pooled_sd = float(np.sqrt((treated_variance + control_variance) / 2.0))
+    difference = float(np.mean(treated) - np.mean(controls))
+    if pooled_sd == 0.0:
+        return float("inf") if difference != 0.0 else 0.0
+    return difference / pooled_sd
+
+
+def _signed_proportion_smd(treated_proportion: float, control_proportion: float) -> float:
+    """Return a signed SMD for a binary indicator or categorical level."""
+    pooled_sd = float(
+        np.sqrt(
+            (
+                treated_proportion * (1.0 - treated_proportion)
+                + control_proportion * (1.0 - control_proportion)
+            )
+            / 2.0
+        )
+    )
+    difference = treated_proportion - control_proportion
+    if pooled_sd == 0.0:
+        return float("inf") if difference != 0.0 else 0.0
+    return difference / pooled_sd
+
+
+def _covariate_balance_smds(
+    treated: pd.DataFrame,
+    controls: pd.DataFrame,
+) -> dict[str, float]:
+    """Compute balance by original field, not by encoded contrast column."""
+    if treated.empty or controls.empty:
+        raise ValueError("Both treatment groups are required for balance diagnostics.")
+
+    diagnostics: dict[str, float] = {}
+    all_absolute_smds: list[float] = []
+
+    for field in NUMERIC_FIELDS:
+        treated_values = pd.to_numeric(treated[field], errors="raise").to_numpy(dtype=np.float64)
+        control_values = pd.to_numeric(controls[field], errors="raise").to_numpy(dtype=np.float64)
+        smd = _signed_numeric_smd(treated_values, control_values)
+        diagnostics[field] = smd
+        all_absolute_smds.append(abs(smd))
+
+    for field in BINARY_FIELDS:
+        positive_level = BINARY_LEVELS[field][1]
+        treated_values = treated[field].astype("string").str.strip().str.upper()
+        control_values = controls[field].astype("string").str.strip().str.upper()
+        if not treated_values.isin(BINARY_LEVELS[field]).all() or not control_values.isin(BINARY_LEVELS[field]).all():
+            raise ValueError(f"Unrecognized binary values for {field} in balance diagnostics.")
+        smd = _signed_proportion_smd(
+            float((treated_values == positive_level).mean()),
+            float((control_values == positive_level).mean()),
+        )
+        diagnostics[field] = smd
+        all_absolute_smds.append(abs(smd))
+
+    for field in CATEGORICAL_FIELDS:
+        treated_values = normalize_categorical_values(field, treated[field])
+        control_values = normalize_categorical_values(field, controls[field])
+        levels = CATEGORY_LEVELS[field]
+        if not treated_values.isin(levels).all() or not control_values.isin(levels).all():
+            raise ValueError(f"Unrecognized categorical values for {field} in balance diagnostics.")
+        level_smds: list[float] = []
+        for level in levels:
+            treated_proportion = float((treated_values == level).mean())
+            control_proportion = float((control_values == level).mean())
+            smd = _signed_proportion_smd(treated_proportion, control_proportion)
+            safe_level = level.replace("-", "_")
+            diagnostics[f"{field}_level_{safe_level}"] = smd
+            level_smds.append(abs(smd))
+        maximum = max(level_smds)
+        diagnostics[f"max_abs_smd_{field}"] = maximum
+        all_absolute_smds.extend(level_smds)
+
+    diagnostics["max_abs_smd"] = max(all_absolute_smds)
+    return diagnostics
+
+
+def _pca_mahalanobis_coordinates(
+    test_features: np.ndarray,
+    treatment: np.ndarray,
+    cumulative_variance_threshold: float = PCA_CUMULATIVE_VARIANCE_THRESHOLD,
+) -> tuple[tuple[np.ndarray, np.ndarray], int, float]:
+    """Fit test-only PCA and return ordinary Mahalanobis coordinates in PC space."""
+    if test_features.ndim != 2 or len(test_features) < 2:
+        raise ValueError("PCA requires at least two test records and a 2D feature matrix.")
+    if test_features.shape[1] != 23:
+        raise ValueError(f"PCA expects the 23 encoded covariates, got {test_features.shape[1]}.")
+    if treatment.shape != (len(test_features),):
+        raise ValueError("PCA treatment labels do not align with test features.")
+
+    column_means = test_features.mean(axis=0)
+    column_scales = test_features.std(axis=0, ddof=0)
+    column_scales[~np.isfinite(column_scales) | (column_scales == 0.0)] = 1.0
+    standardized = (test_features - column_means) / column_scales
+
+    _, singular_values, component_directions = np.linalg.svd(
+        standardized, full_matrices=False
+    )
+    variance = np.square(singular_values)
+    total_variance = float(variance.sum())
+    if not np.isfinite(total_variance) or total_variance <= 0.0:
+        raise ValueError("PCA test features have no finite positive variance.")
+    explained_variance_ratio = variance / total_variance
+    cumulative = np.cumsum(explained_variance_ratio)
+    component_count = min(
+        int(np.searchsorted(cumulative, cumulative_variance_threshold, side="left") + 1),
+        len(singular_values),
+    )
+    retained_variance = float(cumulative[component_count - 1])
+    scores = standardized @ component_directions[:component_count].T
+
+    score_covariance = np.atleast_2d(np.cov(scores, rowvar=False, ddof=1))
+    eigenvalues, eigenvectors = np.linalg.eigh(score_covariance)
+    largest = float(eigenvalues[-1])
+    if not np.isfinite(largest) or largest <= 0.0:
+        raise ValueError("Retained PCA scores have no positive finite covariance eigenvalue.")
+    eigenvalues = np.maximum(eigenvalues, largest * 1e-8)
+    inverse_root = (eigenvectors * (1.0 / np.sqrt(eigenvalues))) @ eigenvectors.T
+    coordinates = np.ascontiguousarray(scores @ inverse_root, dtype=np.float64)
+
+    treated_mask = treatment == 1
+    if not treated_mask.any() or treated_mask.all():
+        raise ValueError("PCA test cohort must contain treated and control records.")
+    return (
+        coordinates[treated_mask],
+        coordinates[~treated_mask],
+    ), component_count, retained_variance
+
+
+def _feature_mapping(transform: Any) -> list[dict[str, str]]:
+    """Map every encoded feature name back to its source covariate field."""
+    mapping: list[dict[str, str]] = []
+    for field in FIELD_ORDER:
+        feature_slice = transform.field_slices[field]
+        for feature_name in transform.feature_names[feature_slice]:
+            mapping.append({"encoded_column": feature_name, "source_covariate": field})
+    return mapping
 
 
 def _cluster_robust_se(differences: np.ndarray, matched_control_indices: np.ndarray) -> float:
@@ -541,7 +685,10 @@ def run_experiment(
         raise ValueError("pilot_rows must be at least 2.")
     if not input_path.exists():
         raise FileNotFoundError(f"Analysis cohort not found: {input_path}")
-    existing_outputs = [path for path in (output_path, summary_path) if path.exists()]
+    feature_map_path = output_path.with_name(f"{output_path.stem}_feature_map.csv")
+    existing_outputs = [
+        path for path in (output_path, summary_path, feature_map_path) if path.exists()
+    ]
     if existing_outputs and not overwrite:
         raise FileExistsError(
             f"Output already exists: {existing_outputs[0]}. Choose another path or pass --overwrite."
@@ -564,6 +711,7 @@ def run_experiment(
         data = data.iloc[pilot_indices].reset_index(drop=True)
         treatment = data["treatment_binary"].to_numpy(dtype=np.int8)
     result_rows: list[dict[str, Any]] = []
+    feature_map_rows: list[dict[str, str]] | None = None
 
     for split_number in range(1, repeats + 1):
         reference_indices, test_indices = _stratified_split(
@@ -575,6 +723,8 @@ def run_experiment(
         # Reference-side preprocessing is kept separate for the AIPW benchmark.
         matching_transform = fit_natality_transform(test)
         test_features = matching_transform.transform(test)
+        if feature_map_rows is None:
+            feature_map_rows = _feature_mapping(matching_transform)
         identity_matrix_weights = matching_transform.diagonal_field_weights()
         reference_transform = fit_natality_transform(reference)
 
@@ -627,6 +777,30 @@ def run_experiment(
         psm["test_fraction"] = test_fraction
         result_rows.append(psm)
 
+        pca_coordinates, pca_components_n, pca_retained_variance = (
+            _pca_mahalanobis_coordinates(
+                test_features,
+                test["treatment_binary"].to_numpy(dtype=np.int8),
+            )
+        )
+        pca = _match_one_method(
+            test,
+            matching_transform,
+            np.ones(len(matching_transform.feature_names), dtype=np.float64),
+            "pca_mahalanobis",
+            split_number,
+            test_coordinates=pca_coordinates,
+            test_features=test_features,
+            method_diagnostics={
+                "pca_components_n": pca_components_n,
+                "pca_cumulative_variance": pca_retained_variance,
+            },
+        )
+        pca = _attach_reference_estimands(pca, reference_estimates)
+        pca["pilot_rows"] = pilot_rows
+        pca["test_fraction"] = test_fraction
+        result_rows.append(pca)
+
         if weights is not None:
             llm_weights = matching_transform.diagonal_field_weights(weights)
             llm = _match_one_method(
@@ -665,6 +839,15 @@ def run_experiment(
         writer.writerows(result_rows)
     print(f"Wrote matching results to {output_path}")
 
+    if feature_map_rows is None:
+        raise RuntimeError("No matching feature mapping was generated.")
+    feature_map_path.parent.mkdir(parents=True, exist_ok=True)
+    with feature_map_path.open("w", encoding="utf-8", newline="") as target:
+        writer = csv.DictWriter(target, fieldnames=["encoded_column", "source_covariate"])
+        writer.writeheader()
+        writer.writerows(feature_map_rows)
+    print(f"Wrote encoded-column source map to {feature_map_path}")
+
     results = pd.DataFrame(result_rows)
     results["squared_error_vs_reference_aipw_g2"] = results["error_vs_reference_aipw_g"] ** 2
     summary = results.groupby("method", as_index=False).agg(
@@ -697,7 +880,28 @@ def run_experiment(
         mean_test_treated_n=("test_treated_n", "mean"),
         mean_test_unique_controls_n=("test_unique_controls_n", "mean"),
         mean_test_max_control_reuse=("test_max_control_reuse", "mean"),
+        mean_pca_components_n=("pca_components_n", "mean"),
+        mean_pca_cumulative_variance=("pca_cumulative_variance", "mean"),
     )
+    balance_aggregations: dict[str, tuple[str, str]] = {}
+    for field in NUMERIC_FIELDS + BINARY_FIELDS:
+        for phase in ("before", "after"):
+            source = f"smd_{phase}_{field}"
+            absolute_source = f"abs_{source}"
+            results[absolute_source] = results[source].abs()
+            balance_aggregations[f"mean_abs_{source}"] = (absolute_source, "mean")
+    for field in CATEGORICAL_FIELDS:
+        for phase in ("before", "after"):
+            maximum_source = f"max_abs_smd_{phase}_{field}"
+            balance_aggregations[f"mean_{maximum_source}"] = (maximum_source, "mean")
+            for level in CATEGORY_LEVELS[field]:
+                safe_level = level.replace("-", "_")
+                source = f"smd_{phase}_{field}_level_{safe_level}"
+                absolute_source = f"abs_{source}"
+                results[absolute_source] = results[source].abs()
+                balance_aggregations[f"mean_abs_{source}"] = (absolute_source, "mean")
+    balance_summary = results.groupby("method", as_index=False).agg(**balance_aggregations)
+    summary = summary.merge(balance_summary, on="method", how="left", validate="one_to_one")
     summary["error_vs_reference_aipw_rmse_g"] = np.sqrt(
         summary["error_vs_reference_aipw_mse_g2"]
     )

@@ -141,8 +141,15 @@ specified outside the LLM.
 - **Identity-matrix unweighted matching:** generalized Mahalanobis distance
   with identity weight matrix (`V = I`) after the study-specific covariate
   coding and scaling. Estimate its ATT in the test cohort.
-- **PCA-based matching:** match in the retained principal-component space.
-  Document preprocessing, component-retention rule, and distance measure.
+- **PCA Mahalanobis matching:** use the existing 23 encoded columns and fixed
+  category schema. For each split, standardize these columns using means and
+  population standard deviations from the pooled 1% test cohort, then fit PCA
+  on that cohort only. Retain the smallest number of components reaching 90%
+  cumulative explained variance. Match using ordinary Mahalanobis distance
+  computed from the covariance of the retained PC scores, without multiplying
+  distances by another explained-variance weight. Apply the shared 1:1
+  nearest-neighbor, replacement, no-caliper rule. Do not use outcomes in
+  standardization, PCA, or matching.
 
 ### Additional comparators
 
@@ -157,9 +164,15 @@ specified outside the LLM.
 
 ## Evaluation and reporting
 
-For every method and split, report:
+For every matching method and split, report:
 
-- Absolute standardized mean differences before and after matching.
+- ATT, control-clustered standard error, matched-control reuse, median and
+  90th-percentile matching distance, and balance before and after matching.
+- For balance, report signed SMDs for each numeric and binary source
+  covariate. For each categorical source covariate, report proportion SMDs for
+  every fixed-schema level and its maximum absolute level SMD. Do not count
+  encoded Helmert columns as separate covariates. Give each encoded column's
+  source covariate in the feature-map output.
 - Treatment-group overlap or covariate-space matchability.
 - Number and proportion of treated births retained or matched.
 - Sensitivity of balance and retention to prespecified matching settings and

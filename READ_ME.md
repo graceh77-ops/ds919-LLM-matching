@@ -17,15 +17,15 @@ treatment and infant birth weight as the outcome.
 2. **Set consistent reference estimators and matching comparators.** Use
    reference-cohort AIPW-ATT as the primary comparison estimate, with IPW and
    outcome regression as separate reference sensitivities. Identity
-   Mahalanobis and PSM are matching comparators, like the LLM-weighted methods.
+   Mahalanobis, PCA Mahalanobis, and PSM are matching comparators, like the
+   LLM-weighted methods.
 3. **Obtain LLM covariate weights in stages.** Start with a manual chat
    interface, then use DeepSeek, and later use an advanced API/model. The LLM 
    provides weights; the analysis design and matching rules are set separately.
 4. **Compare matching approaches.** Apply LLM weights and conventional
    comparators within each 1% test sample. Fit matching preprocessing,
-   Mahalanobis covariance, and propensity scores from that test sample's
-   covariates and treatment only; use its birth weights only after matching to
-   estimate effects.
+   Mahalanobis covariance, PCA, and propensity scores using only that test
+   sample's covariates and treatment.
 5. **Evaluate against the reference estimate.** Use repeated,
    treatment-stratified 99% reference / 1% test splits. Report error relative
    to the reference-cohort AIPW-ATT estimate, not as error against the unknown
@@ -53,6 +53,9 @@ treatment and infant birth weight as the outcome.
 
 The 2024 Natality extraction, initial full-data QC, and analysis-cohort
 preparation are complete. The project has manual-chat and DeepSeek weight records. The matching workflow uses reference-cohort AIPW-ATT as its primary pseudo-reference estimate. The first implementation check passed on the existing 10,000-row pilot workflow; full-cohort AIPW results have not yet been generated. 
+PCA Mahalanobis matching is now implemented as a test-only comparator and has
+passed a 10,000-row development pilot; no full-cohort comparison has yet been
+rerun under the revised matching design.
 
 Raw and processed data are local project inputs and must not be committed to
 Git. See `.gitignore` for the repository rules.

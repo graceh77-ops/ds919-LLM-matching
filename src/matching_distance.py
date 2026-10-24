@@ -87,6 +87,11 @@ def _categorical_values(field: str, values: pd.Series) -> pd.Series:
     return cleaned
 
 
+def normalize_categorical_values(field: str, values: pd.Series) -> pd.Series:
+    """Return recognized categorical labels using the fixed analysis schema."""
+    return _categorical_values(field, values)
+
+
 @dataclass(frozen=True)
 class NatalityFeatureTransform:
     """Cohort-fitted feature coding, centering, scaling, and covariance."""

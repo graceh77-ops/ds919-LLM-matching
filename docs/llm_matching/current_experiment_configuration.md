@@ -22,11 +22,13 @@ The scope is the 2024 CDC Natality singleton cohort described in the
 | Eigenvalue floor | `1e-8` times the largest covariance eigenvalue; floor every lower eigenvalue at that threshold before inverse-square-root construction |
 | Generalized Mahalanobis | `d_V(x_i,x_j) = sqrt((x_i-x_j)' S^(-1/2) V S^(-1/2)(x_i-x_j))`; identity method uses `V = I` |
 | Field-weight mapping | Rescale ten nonnegative field scores to mean 1, then repeat each field score on all columns from that field; column-normalized allocation is a separately labeled sensitivity method |
+| PCA comparator | Z-standardize all 23 encoded columns using pooled 1% test covariates (`ddof = 0`); fit PCA there; retain the minimum component count reaching 90% cumulative explained variance; use ordinary Mahalanobis distance from retained score covariance, with the `1e-8` relative eigenvalue floor and no additional explained-variance weighting |
 | Match rule | 1:1 nearest neighbor, with replacement, no caliper; ties within the coded tolerance resolve to the smallest source `record_number` |
 | Split | Treatment-stratified random 99% reference / 1% test, without replacement within each treatment stratum; use the same split for methods in a repetition |
 | Primary reference estimator | AIPW-ATT in the 99% reference cohort: unpenalized logistic propensity model and control-only OLS outcome model, each using the shared encoded covariates; propensity clipping at `1e-6` and `1 - 1e-6` for finite odds weights |
 | Reference sensitivities | IPW-ATT (normalized odds-weighted control mean) and outcome-regression ATT; report separately without averaging |
-| Matching comparators | Identity-matrix generalized Mahalanobis, PSM, and LLM-weighted matching use only 1% test-sample covariates and treatment to fit matching preprocessing, distances, and propensity scores; matching is within the 1% test cohort |
+| Matching comparators | Identity-matrix generalized Mahalanobis, PSM, PCA Mahalanobis, and LLM-weighted matching use only 1% test-sample covariates and treatment to fit matching preprocessing, distances, and propensity scores; matching is within the 1% test cohort |
+| Matching balance | Numeric and binary source-covariate SMDs; per-level proportion SMDs and maximum absolute level SMD for each categorical covariate; no encoded Helmert column is counted as a separate covariate |
 | Evaluation | Report each test-sample ATT and its error relative to reference-cohort AIPW, plus the IPW and outcome-regression reference sensitivities, uncertainty, overlap, balance, weights, ESS, and matching diagnostics |
 
 Repeated splits draw from the same source cohort. They are within-cohort
@@ -48,8 +50,11 @@ resampling, not independent validation or external replication.
   fitted on 1% test-sample treatment and covariates. Its logit scores are used
   to match treated and controls within that same test sample under the shared
   1:1 replacement/no-caliper rule.
-- **PCA and genetic matching:** not included in the frozen current comparison;
-  their detailed specifications have not been finalized.
+- **PCA Mahalanobis:** uses test-only standardized 23-column features, the 90%
+  cumulative explained-variance retention rule, and ordinary Mahalanobis
+  distance on retained PC scores. It is included as a comparator.
+- **Genetic matching:** not included in the current comparison; its detailed
+  specification has not been finalized.
 
 ## Historical run settings and outputs
 
@@ -57,8 +62,9 @@ The recorded historical run setting is seed `20261022` with one split. The
 previous matching runs used reference-fitted matching preprocessing and
 reference-fitted PSM; they predate the test-only matching data boundary above
 and should be treated as historical, not results under the current
-configuration. No comparisons have yet been rerun under the revised boundary.
-The full-cohort comparison used the 1% test fraction. The earlier development
+configuration. A new development pilot has been run under the revised design,
+but no full-cohort comparison has been rerun. The historical full-cohort
+comparison used the 1% test fraction. The earlier development
 pilot used a 10,000-row random subset and a 20% test fraction. The final repetition count and seed plan remain open and must be recorded before
 the next comparison. The first AIPW implementation validation also used the
 existing 10,000-row pilot mode, one split, seed `20261022`, and 20% test
@@ -66,8 +72,23 @@ fraction; its outputs are `results/pilot runs/aipw_reference_validation.csv`
 and `results/pilot runs/aipw_reference_validation_summary.csv`. This is a
 development validation, not a full-cohort estimate or final comparison.
 
-The matching output tables retain method-level test-sample estimates
-and diagnostics. 
+The PCA implementation validation used a 10,000-row random subset, one split,
+seed `20261023`, a 20% test fraction, and the outcome-blind manual-chat weights
+for the weighted comparison methods. It retained 17 PCs explaining
+`0.912918` cumulative variance. The PCA row reported a test ATT of
+`-153.16` grams (control-clustered SE `130.63` grams); these are development
+pilot outputs, not study estimates. Detailed rows, method summary, and the
+23-row encoded-column source map are in `results/pilot runs/`:
+`pca_validation_20261023.csv`,
+`pca_validation_20261023_summary.csv`, and
+`pca_validation_20261023_feature_map.csv`.
+
+The matching output table contains one row per method and split, including
+method-level test-sample estimates, diagnostics, and source-covariate balance.
+The summary table aggregates these measures by method. A companion
+`matching_experiment_feature_map.csv` maps every encoded column to its source
+covariate. PCA rows also record the retained component count and cumulative
+variance explained.
 
 ## Matching and reference data boundary
 
@@ -100,4 +121,4 @@ proposed code-quality safeguard, not as a current pipeline property.
    the next comparison.
 2. Decide whether to implement the function-boundary refactor before running
    further comparisons.
-3. Specify PCA and genetic matching only if they are brought into scope.
+3. Specify genetic matching only if it is brought into scope.
