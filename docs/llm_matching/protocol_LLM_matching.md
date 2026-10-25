@@ -197,4 +197,8 @@ Document the cohort definition, variable coding, covariate set, split
 assignments or seed procedure, LLM prompts and settings, returned weights,
 matching specifications, reference estimator, and metric calculations before
 the final method comparison. Preserve enough outputs to reproduce each
-method's estimate and diagnostic for each split.
+method's estimate and diagnostic for each split. By default, each run's
+detailed results, method summary, and encoded-column feature map are saved in
+a new dated `{repeats}-split YYYYMMDD` folder under `results/matching results/`;
+see the [current experiment configuration](current_experiment_configuration.md)
+for the file naming convention and recorded runs.

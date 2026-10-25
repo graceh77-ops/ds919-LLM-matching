@@ -2,9 +2,9 @@
 
 ## Status and scope
 
-This document records the current implementation and configuration. The AIPW
-implementation has been checked with the development pilot recorded below; no
-new full-cohort AIPW comparison has been run.
+This document records the current implementation and configuration. AIPW and
+the test-only matching workflow have been checked in development pilots and
+exploratory full-cohort runs recorded below.
 The scope is the 2024 CDC Natality singleton cohort described in the
 [maternal smoking analysis protocol](../maternal_smoking_birthweight/protocal_maternal_smoking_dataset.md).
 
@@ -58,13 +58,16 @@ resampling, not independent validation or external replication.
 
 ## Historical run settings and outputs
 
-The recorded historical run setting is seed `20261022` with one split. The
-previous matching runs used reference-fitted matching preprocessing and
-reference-fitted PSM; they predate the test-only matching data boundary above
-and should be treated as historical, not results under the current
-configuration. A new development pilot has been run under the revised design,
-but no full-cohort comparison has been rerun. The historical full-cohort
-comparison used the 1% test fraction. The earlier development
+The historical pre-refactor matching runs used reference-fitted matching
+preprocessing and reference-fitted PSM; they predate the test-only matching
+data boundary above and should be treated as historical, not results under
+the current configuration. Under the revised design, the full cohort has been
+run with one split (seed `20261022`, dated `20261023`) and two splits (seed
+`20261022`, dated `20261024`), both using a 1% test fraction and the
+outcome-blind manual-chat weights. These are exploratory comparisons, not a
+final repeated-split evaluation. Their outputs are in
+`results/matching results/1-split 20261023/` and
+`results/matching results/2-split 20261024/`. The earlier development
 pilot used a 10,000-row random subset and a 20% test fraction. The final repetition count and seed plan remain open and must be recorded before
 the next comparison. The first AIPW implementation validation also used the
 existing 10,000-row pilot mode, one split, seed `20261022`, and 20% test
@@ -83,12 +86,19 @@ pilot outputs, not study estimates. Detailed rows, method summary, and the
 `pca_validation_20261023_summary.csv`, and
 `pca_validation_20261023_feature_map.csv`.
 
+By default, each experiment run writes to a new dated folder under
+`results/matching results/`, named `{repeats}-split YYYYMMDD` (for example,
+`20-split 20261024`). The folder contains `complete_information.csv` (one row
+per method and split), `summary.csv` (aggregated by method), and
+`complete_information_feature_map.csv`. A numbered suffix is added if the
+same split-count/date folder already exists. Explicit `--output` and
+`--summary-output` paths override this default.
+
 The matching output table contains one row per method and split, including
 method-level test-sample estimates, diagnostics, and source-covariate balance.
-The summary table aggregates these measures by method. A companion
-`matching_experiment_feature_map.csv` maps every encoded column to its source
-covariate. PCA rows also record the retained component count and cumulative
-variance explained.
+The summary table aggregates these measures by method. The feature map maps
+every encoded column to its source covariate. PCA rows also record the
+retained component count and cumulative variance explained.
 
 ## Matching and reference data boundary
 

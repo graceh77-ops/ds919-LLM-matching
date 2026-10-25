@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -29,8 +30,7 @@ from matching_distance import (
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INPUT = PROJECT_ROOT / "data" / "processed" / "2024" / "analysis_cohort_singletons.csv"
-DEFAULT_OUTPUT = PROJECT_ROOT / "results" / "matching_experiment.csv"
-DEFAULT_SUMMARY_OUTPUT = PROJECT_ROOT / "results" / "matching_experiment_summary.csv"
+DEFAULT_RESULTS_ROOT = PROJECT_ROOT / "results" / "matching results"
 DEFAULT_TEST_FRACTION = 0.01
 PCA_CUMULATIVE_VARIANCE_THRESHOLD = 0.90
 REFERENCE_MODEL_CHUNK_SIZE = 100_000
@@ -913,8 +913,16 @@ def run_experiment(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
-    parser.add_argument("--summary-output", type=Path, default=DEFAULT_SUMMARY_OUTPUT)
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help="Optional detailed-results CSV path. By default, create a dated run folder.",
+    )
+    parser.add_argument(
+        "--summary-output",
+        type=Path,
+        help="Optional summary CSV path. By default, place it beside the detailed results.",
+    )
     parser.add_argument("--repeats", type=int, required=True)
     parser.add_argument("--seed", type=int, required=True)
     parser.add_argument(
@@ -943,11 +951,27 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    if args.output is None and args.summary_output is None:
+        run_label = f"{args.repeats}-split {date.today():%Y%m%d}"
+        output_dir = DEFAULT_RESULTS_ROOT / run_label
+        suffix = 2
+        while output_dir.exists():
+            output_dir = DEFAULT_RESULTS_ROOT / f"{run_label} ({suffix})"
+            suffix += 1
+        output_path = output_dir / "complete_information.csv"
+        summary_path = output_dir / "summary.csv"
+    elif args.output is not None:
+        output_path = args.output
+        summary_path = args.summary_output or args.output.with_name("summary.csv")
+    else:
+        summary_path = args.summary_output
+        output_path = summary_path.with_name("complete_information.csv")
+
     weights = _load_weights(args.weights_json) if args.weights_json else None
     run_experiment(
         input_path=args.input,
-        output_path=args.output,
-        summary_path=args.summary_output,
+        output_path=output_path,
+        summary_path=summary_path,
         repeats=args.repeats,
         seed=args.seed,
         test_fraction=args.test_fraction,

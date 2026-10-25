@@ -52,10 +52,10 @@ treatment and infant birth weight as the outcome.
 ## Current status
 
 The 2024 Natality extraction, initial full-data QC, and analysis-cohort
-preparation are complete. The project has manual-chat and DeepSeek weight records. The matching workflow uses reference-cohort AIPW-ATT as its primary pseudo-reference estimate. The first implementation check passed on the existing 10,000-row pilot workflow; full-cohort AIPW results have not yet been generated. 
-PCA Mahalanobis matching is now implemented as a test-only comparator and has
-passed a 10,000-row development pilot; no full-cohort comparison has yet been
-rerun under the revised matching design.
+preparation are complete. The project has manual-chat and DeepSeek weight
+records. The matching workflow uses reference-cohort AIPW-ATT as its primary
+pseudo-reference estimate. Full-cohort runs are exploratory; the final split count
+and seed plan have not been frozen.
 
 Raw and processed data are local project inputs and must not be committed to
 Git. See `.gitignore` for the repository rules.
