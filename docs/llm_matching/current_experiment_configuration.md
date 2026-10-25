@@ -22,6 +22,7 @@ The scope is the 2024 CDC Natality singleton cohort described in the
 | Eigenvalue floor | `1e-8` times the largest covariance eigenvalue; floor every lower eigenvalue at that threshold before inverse-square-root construction |
 | Generalized Mahalanobis | `d_V(x_i,x_j) = sqrt((x_i-x_j)' S^(-1/2) V S^(-1/2)(x_i-x_j))`; identity method uses `V = I` |
 | Field-weight mapping | Rescale ten nonnegative field scores to mean 1, then repeat each field score on all columns from that field; column-normalized allocation is a separately labeled sensitivity method |
+| Default LLM weights | Outcome-blind DeepSeek API weights from `results/matching results/deepseek_api/20261022T081027Z/weights.json`; pass `--weights-json` to select another set, such as manual-chat weights |
 | PCA comparator | Z-standardize all 23 encoded columns using pooled 1% test covariates (`ddof = 0`); fit PCA there; retain the minimum component count reaching 90% cumulative explained variance; use ordinary Mahalanobis distance from retained score covariance, with the `1e-8` relative eigenvalue floor and no additional explained-variance weighting |
 | Match rule | 1:1 nearest neighbor, with replacement, no caliper; ties within the coded tolerance resolve to the smallest source `record_number` |
 | Split | Treatment-stratified random 99% reference / 1% test, without replacement within each treatment stratum; use the same split for methods in a repetition |
@@ -42,8 +43,9 @@ resampling, not independent validation or external replication.
   and a robust influence-function standard error with a 95% Wald interval.
 - **IPW-ATT and outcome-regression ATT:** separate reference sensitivity
   estimates; do not average them with AIPW.
-- **LLM field weighting:** Outcome-blind manual-chat weights and DeepSeek API  
-  weights have been generated and recorded separately.
+- **LLM field weighting:** The recorded outcome-blind DeepSeek API weights are
+  the default for future runs. Manual-chat weights remain a separate
+  alternative for comparison; neither set is treated as ground truth.
 - **Identity generalized Mahalanobis:** matching comparator evaluated within
   the 1% test cohort, on the same footing as PSM and LLM-weighted matching.
 - **PSM:** The unpenalized logistic model uses the 23 encoded covariates and is
@@ -65,15 +67,20 @@ the current configuration. Under the revised design, the full cohort has been
 run with one split (seed `20261022`, dated `20261023`) and two splits (seed
 `20261022`, dated `20261024`), both using a 1% test fraction and the
 outcome-blind manual-chat weights. These are exploratory comparisons, not a
-final repeated-split evaluation. Their outputs are in
+final repeated-split evaluation. The manual-chat outputs are in
 `results/matching results/1-split 20261023/` and
-`results/matching results/2-split 20261024/`. The earlier development
-pilot used a 10,000-row random subset and a 20% test fraction. The final repetition count and seed plan remain open and must be recorded before
-the next comparison. The first AIPW implementation validation also used the
-existing 10,000-row pilot mode, one split, seed `20261022`, and 20% test
-fraction; its outputs are `results/pilot runs/aipw_reference_validation.csv`
-and `results/pilot runs/aipw_reference_validation_summary.csv`. This is a
-development validation, not a full-cohort estimate or final comparison.
+`results/matching results/2-split 20261024/`. A paired two-split DeepSeek API
+run used the same seed (`20261022`) and 1% test fraction; its outputs are in
+`results/matching results/2-split 20261024 (2)/`. This run recalculated all
+methods on the same partitions, and its conventional comparator results match
+the manual-chat run. This default records the project’s chosen standard input 
+and does not imply that the two-split results establish DeepSeek as superior. 
+The earlier development pilot used a 10,000-row random subset and a 20% test 
+fraction. The final repetition count and seed plan remain open and must be 
+recorded before the next comparison. The first AIPW implementation validation 
+also used the existing 10,000-row pilot mode, one split, seed `20261022`, and 
+20% test fraction; its outputs are `results/pilot runs/aipw_reference_validation.csv` 
+and `results/pilot runs/aipw_reference_validation_summary.csv`. 
 
 The PCA implementation validation used a 10,000-row random subset, one split,
 seed `20261023`, a 20% test fraction, and the outcome-blind manual-chat weights

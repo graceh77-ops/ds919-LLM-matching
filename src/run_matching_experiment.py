@@ -31,6 +31,9 @@ from matching_distance import (
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INPUT = PROJECT_ROOT / "data" / "processed" / "2024" / "analysis_cohort_singletons.csv"
 DEFAULT_RESULTS_ROOT = PROJECT_ROOT / "results" / "matching results"
+DEFAULT_WEIGHTS_JSON = (
+    DEFAULT_RESULTS_ROOT / "deepseek_api" / "20261022T081027Z" / "weights.json"
+)
 DEFAULT_TEST_FRACTION = 0.01
 PCA_CUMULATIVE_VARIANCE_THRESHOLD = 0.90
 REFERENCE_MODEL_CHUNK_SIZE = 100_000
@@ -936,10 +939,20 @@ def parse_args() -> argparse.Namespace:
         type=int,
         help="Optional random subset size for a development pilot; not a study result.",
     )
-    parser.add_argument(
+    weight_group = parser.add_mutually_exclusive_group()
+    weight_group.add_argument(
         "--weights-json",
         type=Path,
-        help="Optional JSON object with one nonnegative value for each of the 10 fields.",
+        default=DEFAULT_WEIGHTS_JSON,
+        help=(
+            "JSON object with one nonnegative value for each field "
+            f"(default: {DEFAULT_WEIGHTS_JSON}). Use this to select manual-chat weights."
+        ),
+    )
+    weight_group.add_argument(
+        "--no-llm-weights",
+        action="store_true",
+        help="Run conventional comparison methods without either LLM-weighted method.",
     )
     parser.add_argument(
         "--overwrite",
@@ -967,7 +980,11 @@ def main() -> None:
         summary_path = args.summary_output
         output_path = summary_path.with_name("complete_information.csv")
 
-    weights = _load_weights(args.weights_json) if args.weights_json else None
+    weights = (
+        None
+        if args.no_llm_weights
+        else _load_weights(args.weights_json)
+    )
     run_experiment(
         input_path=args.input,
         output_path=output_path,

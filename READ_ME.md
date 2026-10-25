@@ -55,7 +55,8 @@ The 2024 Natality extraction, initial full-data QC, and analysis-cohort
 preparation are complete. The project has manual-chat and DeepSeek weight
 records. The matching workflow uses reference-cohort AIPW-ATT as its primary
 pseudo-reference estimate. Full-cohort runs are exploratory; the final split count
-and seed plan have not been frozen.
+and seed plan have not been frozen. The recorded DeepSeek API weights are the
+default for future LLM-weighted runs.
 
 Raw and processed data are local project inputs and must not be committed to
 Git. See `.gitignore` for the repository rules.

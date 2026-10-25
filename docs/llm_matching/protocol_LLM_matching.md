@@ -105,13 +105,13 @@ Apply the same covariate-weighting task and Natality design in three stages:
    isolated session using the
    [outcome-blind manual-chat protocol](weight%20extraction%20protocol/manual_chat_weight_protocol.md)
    and [standalone prompt](weight%20extraction%20protocol/llm_prompt_covariate_weights.md).
-   Use the recorded
-   outcome-blind weights in the current project results and evaluate them
-   separately from DeepSeek weights.
+   Preserve the recorded weights as a separate method input for comparison.
 2. **DeepSeek API:** apply the same weighting task through the separate
    implementation in [`src/get_deepseek_weights.py`](../../src/get_deepseek_weights.py).
    Preserve its exact prompt, settings, returned weights, and API response in
-   the timestamped run record; evaluate it separately from manual-chat weights.
+   the timestamped run record; the currently selected outcome-blind DeepSeek
+   weights are the default input for matching runs. The manual-chat weights
+   remain available by passing their JSON path with `--weights-json`.
 3. **Advanced API:** then use the more advanced API/model(to be identified).
 
 For every stage, give the LLM only the pre-specified covariate names,
@@ -123,7 +123,8 @@ Request structured output that can be checked and applied reproducibly. Record
 the interface or model and version, exact prompt, settings, date, returned
 weights, any retries, and any manual changes. Use the resulting weights
 consistently across repeated splits for that stage; do not tune weights against
-test outcomes.
+test outcomes. Selecting DeepSeek as the current default is an operational
+project choice; it does not establish that DeepSeek weights perform better.
 
 ## Methods to compare
 
