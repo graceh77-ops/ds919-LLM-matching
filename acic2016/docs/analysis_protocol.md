@@ -2,12 +2,20 @@
 
 ## Evaluation design
 
+- The motivating scientific scenario is a hypothetical study of birthweight's
+  effect on IQ. In ACIC, each replication supplies a simulated binary treatment
+  `z`, continuous potential outcomes `y0` and `y1`, and expected outcomes
+  `mu0` and `mu1`. Do not assign a clinical meaning or birthweight cutoff to
+  `z = 1`; the available competition description does not define it.
 - Analyze each of the 77 simulation settings and its 100 replications as a
   separate cohort of 4,802 units. Do not make a 99/1 reference/test split.
 - Match treated and control units within each replication. The known potential
   outcomes are reserved for calculating reference effects and evaluating
   matched estimates; they must not enter preprocessing, weight assignment, or
-  match selection.
+  match selection. The current loader does read the outcome columns and
+  calculates the reference effects before matching, but matching-coordinate
+  construction and match selection use only covariates and treatment; outcome
+  values enter the evaluator after matches have been selected.
 - The primary reference is realized SATT,
   `mean(y1 - y0 | z = 1)`. Report the expected effect,
   `mean(mu1 - mu0 | z = 1)`, separately as a secondary reference.
@@ -29,7 +37,12 @@ as covariates. Apply one fixed schema in every replication:
   one covariate: numeric SMD for numeric fields and per-level proportion SMDs
   for categorical fields, summarized by the maximum absolute level SMD.
 
-The feature encoding is fixed across replications. Any method-specific
+The feature encoding is fixed across replications. The proposed semantic
+labels for `x_1` through `x_58` are provisional order-based mappings; see the
+[mapping evidence audit](covariate_mapping_evidence.md). Keep the same input
+fields for each matching comparator, and interpret LLM weights as priorities
+assigned to the prompt's described fields, not verified clinical confounder
+importance. Any method-specific
 centering, scaling, covariance, PCA, or propensity model is fitted separately
 within the current replication using only its covariates and treatment.
 
@@ -64,12 +77,11 @@ eigenvalues at `1e-8` times the largest eigenvalue before inverse-square-root
 construction. Apply the same rule to retained PCA score covariance. Report the
 number of retained PCs and cumulative explained variance for PCA.
 
-LLM field weights require a prompt and record that describe the 58 fields. The
-current `x.csv` names are synthetic identifiers and the three categorical
-fields are coded levels. Until an authoritative field dictionary is available,
-do not present weights elicited from `x_1`-style names as semantic covariate
-importance. Either obtain the data dictionary or label such an experiment
-explicitly as anonymous-feature weighting.
+LLM field weights come from a separately recorded DeepSeek elicitation. The
+current prompt gives provisional field descriptions but omits most encoding
+details, category code meanings, and measurement units. Report the elicitation
+as description-based weighting with provisional labels; do not imply that the
+mapping or the weights represent validated clinical importance.
 
 ## Outcomes and reporting
 
@@ -92,7 +104,9 @@ diagnostic; the known SATT comparison remains the primary accuracy measure.
 covariate matrix and feature map, derives observed outcomes, and calculates
 realized and expected SATT. `src/run_matching_experiment.py` implements
 identity generalized Mahalanobis, PSM, and PCA Mahalanobis matching, with
-optional LLM field weights supplied as JSON. Its initial one-replication pilot
-ran on setting 1, `zymu_13.csv`; see the timestamped folder under `results/`.
-The full 7,700-replication evaluation has not been run. LLM weighting remains
-pending an ACIC field dictionary or an explicitly anonymous-feature protocol.
+optional LLM field weights supplied as JSON. An initial one-replication pilot
+ran on setting 1, `zymu_13.csv`, without LLM weights. The latest DeepSeek
+vector is saved at
+`results/llm_weights/deepseek_api/20261026T234904Z/weights.json` and is the
+planned vector for the next pilot. The full 7,700-replication evaluation and
+the LLM-weighted pilot have not been run.
