@@ -1,0 +1,28 @@
+{
+  "id": "148876ac-666f-4045-a43a-2f244754bcd7",
+  "object": "chat.completion",
+  "created": 1792992120,
+  "model": "deepseek-flash",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"MAGER\": 6, \"MRACEHISP\": 7, \"MEDUC\": 6, \"CIG0_R\": 9, \"PRIORLIVE\": 7, \"PRIORDEAD\": 4, \"BMI_R\": 7, \"RF_PDIAB\": 5, \"RF_PHYPE\": 5, \"SEX\": 6, \"birth_year\": 8}"
+      },
+      "logprobs": null,
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 536,
+    "completion_tokens": 92,
+    "total_tokens": 628,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "prompt_cache_hit_tokens": 0,
+    "prompt_cache_miss_tokens": 536
+  },
+  "system_fingerprint": "e72d3c7f663d3e1383b00b3884cb4501"
+}

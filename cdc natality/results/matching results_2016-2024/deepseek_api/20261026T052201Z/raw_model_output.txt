@@ -1,0 +1,1 @@
+{"MAGER": 6, "MRACEHISP": 7, "MEDUC": 6, "CIG0_R": 9, "PRIORLIVE": 7, "PRIORDEAD": 4, "BMI_R": 7, "RF_PDIAB": 5, "RF_PHYPE": 5, "SEX": 6, "birth_year": 8}
