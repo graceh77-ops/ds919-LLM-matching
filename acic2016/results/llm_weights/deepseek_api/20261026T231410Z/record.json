@@ -1,0 +1,24 @@
+{
+  "status": "success",
+  "timestamp_utc": "2026-10-26T23:14:10.661649+00:00",
+  "provider": "DeepSeek",
+  "requested_model": "deepseek-flash",
+  "returned_model": "deepseek-flash",
+  "prompt_path": "C:\\Users\\grace\\Desktop\\LLM_Matching\\ds919-LLM-matching\\acic2016\\docs\\llm_matching\\weight_prompt.md",
+  "prompt_sha256": "a811ea2b98202a71527ae2703c7d4e793ec010060e1e8f74b89570e0ca308cf9",
+  "temperature": 0,
+  "thinking": "disabled",
+  "max_tokens": 2048,
+  "stream": false,
+  "response_format": "json_object",
+  "usage": {
+    "prompt_tokens": 1809,
+    "completion_tokens": 464,
+    "total_tokens": 2273,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "prompt_cache_hit_tokens": 0,
+    "prompt_cache_miss_tokens": 1809
+  }
+}

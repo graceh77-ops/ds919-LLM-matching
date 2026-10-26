@@ -42,6 +42,19 @@ select a vector after inspecting outcomes or benchmark errors.
 
 ## Current status
 
-The prompt and field dictionary are prepared. No ACIC LLM weights have been
-elicited. The runner can load a validated field-weight JSON; the initial pilot
-therefore included only identity Mahalanobis, PSM, and PCA Mahalanobis.
+The prompt, field dictionary, and DeepSeek API elicitation script are prepared.
+No ACIC LLM weights have been elicited yet. From the repository root, set
+`DEEPSEEK_API_KEY` in the current PowerShell session and run:
+
+```powershell
+python .\acic2016\src\get_deepseek_weights.py
+```
+
+The script sends one request containing only the standalone prompt, validates
+the exact 58-key integer JSON response, and saves the prompt, raw response,
+raw model text, validated `weights.json`, and request record in a new
+timestamped folder under `acic2016/results/llm_weights/deepseek_api/`. It does
+not retry automatically or overwrite an existing run. The matching runner
+then loads the saved vector with `--weights-json PATH`; it does not call the
+API during matching. The initial pilot therefore included only identity
+Mahalanobis, PSM, and PCA Mahalanobis.
