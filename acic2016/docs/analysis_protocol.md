@@ -15,9 +15,13 @@
 
 ## Covariates and reporting
 
-Use all 58 fields in `x.csv`. Before experiments, document a fixed encoding for
-categorical and numeric fields and apply it consistently across replications.
-Prespecify matching ratio, replacement, caliper, and method-specific settings.
+Use all 58 fields in `x.csv`. Encode `x_2` (A–F), `x_21` (A–P), and `x_24`
+(A–E) as categorical using fixed one-hot columns, dropping level A. Keep the
+other 55 fields numeric, including the five binary fields. This yields 79
+encoded columns; retain a map from each encoded column to its source field.
+Apply this schema across replications. Prespecify scaling, matching ratio,
+replacement, caliper, and other method settings before experiments; exclude
+outcomes from all preprocessing.
 
 Report each method's matched ATT, error from realized SATT, uncertainty
 interval, treated/control counts, control reuse, and covariate balance. Summarize

@@ -17,6 +17,11 @@ EXPECTED_ROWS = 4802
 EXPECTED_COVARIATES = 58
 REPLICATION_PATTERN = re.compile(r"^zymu_(\d+)\.csv$")
 OUTCOME_COLUMNS = ("z", "y0", "y1", "mu0", "mu1")
+CATEGORICAL_LEVELS = {
+    "x_2": tuple("ABCDEF"),
+    "x_21": tuple("ABCDEFGHIJKLMNOP"),
+    "x_24": tuple("ABCDE"),
+}
 
 
 @dataclass(frozen=True)
@@ -26,6 +31,8 @@ class ACICReplication:
     setting: int
     replication_file: str
     covariates: pd.DataFrame
+    encoded_covariates: pd.DataFrame
+    feature_map: pd.DataFrame
     treatment: pd.Series
     observed_outcome: pd.Series
     y0: pd.Series
@@ -98,6 +105,7 @@ def load_replication(
         )
     if covariates.isna().any().any():
         raise ValueError("Covariates contain missing values")
+    encoded_covariates, feature_map = encode_covariates(covariates)
 
     numeric = outcomes.loc[:, list(OUTCOME_COLUMNS)].apply(
         pd.to_numeric, errors="coerce"
@@ -127,6 +135,8 @@ def load_replication(
         setting=setting,
         replication_file=filename.name,
         covariates=covariates,
+        encoded_covariates=encoded_covariates,
+        feature_map=feature_map,
         treatment=treatment,
         observed_outcome=observed,
         y0=y0,
@@ -136,6 +146,69 @@ def load_replication(
         realized_satt=float((y1.to_numpy()[treated] - y0.to_numpy()[treated]).mean()),
         expected_satt=float((mu1.to_numpy()[treated] - mu0.to_numpy()[treated]).mean()),
     )
+
+
+def encode_covariates(
+    covariates: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Apply the fixed 79-column schema and return its source-field map."""
+    if covariates.shape[1] != EXPECTED_COVARIATES:
+        raise ValueError(
+            f"Expected {EXPECTED_COVARIATES} covariates; found {covariates.shape[1]}"
+        )
+    if covariates.isna().any().any():
+        raise ValueError("Covariates contain missing values")
+
+    encoded_parts: list[pd.Series] = []
+    mapping: list[dict[str, str]] = []
+    for column in covariates.columns:
+        if column in CATEGORICAL_LEVELS:
+            levels = CATEGORICAL_LEVELS[column]
+            values = set(covariates[column].astype(str).unique())
+            unexpected = values.difference(levels)
+            if unexpected:
+                raise ValueError(
+                    f"Unexpected levels for {column}: {sorted(unexpected)}"
+                )
+            for level in levels[1:]:
+                name = f"{column}_{level}"
+                encoded_parts.append(
+                    pd.Series(
+                        (covariates[column].astype(str) == level).astype("int8"),
+                        name=name,
+                    )
+                )
+                mapping.append(
+                    {
+                        "encoded_column": name,
+                        "source_field": column,
+                        "encoding": "one-hot contrast; A is reference",
+                        "level": level,
+                    }
+                )
+        else:
+            numeric = pd.to_numeric(covariates[column], errors="coerce")
+            values = numeric.to_numpy(dtype=float)
+            if not np.isfinite(values).all():
+                raise ValueError(f"Numeric field {column} contains invalid values")
+            encoded_parts.append(numeric.rename(column))
+            mapping.append(
+                {
+                    "encoded_column": column,
+                    "source_field": column,
+                    "encoding": "numeric; original scale",
+                    "level": "",
+                }
+            )
+
+    encoded = pd.concat(encoded_parts, axis=1).reset_index(drop=True)
+    feature_map = pd.DataFrame(
+        mapping,
+        columns=["encoded_column", "source_field", "encoding", "level"],
+    )
+    if encoded.shape[1] != 79:
+        raise ValueError(f"Expected 79 encoded columns; found {encoded.shape[1]}")
+    return encoded, feature_map
 
 
 def _validate_setting(setting: int) -> None:
@@ -165,7 +238,10 @@ def main() -> None:
     treated_n = int(data.treatment.sum())
     print(f"Setting: {data.setting}")
     print(f"Replication: {data.replication_file}")
-    print(f"Rows: {len(data.treatment)}; covariates: {data.covariates.shape[1]}")
+    print(
+        f"Rows: {len(data.treatment)}; source covariates: {data.covariates.shape[1]}; "
+        f"encoded columns: {data.encoded_covariates.shape[1]}"
+    )
     print(f"Treated: {treated_n}; controls: {len(data.treatment) - treated_n}")
     print(f"Realized SATT: {data.realized_satt:.8f}")
     print(f"Expected SATT: {data.expected_satt:.8f}")
