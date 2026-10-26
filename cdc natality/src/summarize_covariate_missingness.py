@@ -63,6 +63,8 @@ FLAG_CROSS_TABS = {
     "MRACEHISP": ("MRACEIMP", "F_MHISP"),
     "MEDUC": ("F_MEDUC",),
     "CIG0_R": ("F_CIGS_0",),
+    # F_M_HT is BMI_R's reporting flag; F_PWGT is kept as a descriptive
+    # cross-check for PWgt_R, not as an eligibility requirement.
     "BMI_R": ("F_M_HT", "F_PWGT"),
     "RF_PDIAB": ("F_RF_PDIAB",),
     "RF_PHYPE": ("F_RF_PHYPER",),
@@ -73,7 +75,6 @@ REQUIRED_REPORTING_FLAGS = {
     "F_MEDUC",
     "F_CIGS_0",
     "F_M_HT",
-    "F_PWGT",
     "F_RF_PDIAB",
     "F_RF_PHYPER",
 }
@@ -230,7 +231,7 @@ def main():
     rows.extend([
         "## Covariate-by-flag cross-checks",
         "",
-        "These tables check whether a selected covariate value appears alongside a non-reporting or imputation flag. The flag-aware scenario requires the selected item to be reported where a reporting flag applies, including Hispanic origin, education, pre-pregnancy smoking, height and weight used for BMI, diabetes, and hypertension. Imputation flags are reviewed but do not by themselves make a value missing.",
+        "These tables check whether a selected covariate value appears alongside a non-reporting or imputation flag. The flag-aware scenario requires the selected item to be reported where a reporting flag applies, including Hispanic origin, education, pre-pregnancy smoking, maternal height for BMI_R, diabetes, and hypertension. F_PWGT is shown as an audit cross-check for the separate PWgt_R field and is not an eligibility requirement. Imputation flags are reviewed but do not by themselves make a value missing.",
         "",
     ])
     for (field, flag), counts in flag_cross_tabs.items():

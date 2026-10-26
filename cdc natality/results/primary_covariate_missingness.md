@@ -1,5 +1,10 @@
 # Primary Covariate Missingness Review
 
+> Historical 2024 report generated under the previous flag-aware rule, which
+> treated `F_PWGT` as an eligibility requirement. The current rule retains
+> `F_PWGT` for audit only. Counts and the flag-aware comparison below have not
+> been regenerated under the updated rule.
+
 ## Scope
 
 - Input: `data\processed\2024\extracted_natality.csv`
@@ -231,7 +236,7 @@ Flags are reported as coded in the cohort. For reporting flags, `0` means non-re
 
 ## Covariate-by-flag cross-checks
 
-These tables check whether a selected covariate value appears alongside a non-reporting or imputation flag. The flag-aware scenario requires the selected item to be reported where a reporting flag applies, including Hispanic origin, education, pre-pregnancy smoking, height and weight used for BMI, diabetes, and hypertension. Imputation flags are reviewed but do not by themselves make a value missing.
+These tables check whether a selected covariate value appears alongside a non-reporting or imputation flag. The historical flag-aware scenario required the selected item to be reported where a reporting flag applies, including Hispanic origin, education, pre-pregnancy smoking, height for BMI_R, pre-pregnancy weight, diabetes, and hypertension. Under the current rule, F_PWGT is an audit cross-check only. Imputation flags are reviewed but do not by themselves make a value missing.
 
 ### `MAGER` by `MAGE_IMPFLG`
 
@@ -411,4 +416,4 @@ These are descriptive scenarios: retain a record only when every proposed primar
 
 ## Interpretation and next decision
 
-The flag-aware complete-case rule was selected for the primary analysis cohort and applied in `prepare_analysis_data.py`. The code-based complete-case count is shown as an eligibility comparison only. Reporting flags are eligibility checks, not matching covariates; CDC-imputed age, race, and sex values remain eligible and their imputation flags are retained for audit.
+The historical flag-aware complete-case rule was applied in `prepare_analysis_data.py` when this report was generated. The code-based complete-case count is shown as an eligibility comparison only. Current eligibility no longer requires `F_PWGT`; regenerate this report to obtain current counts. Reporting flags are eligibility checks, not matching covariates; CDC-imputed age, race, and sex values remain eligible and their imputation flags are retained for audit.

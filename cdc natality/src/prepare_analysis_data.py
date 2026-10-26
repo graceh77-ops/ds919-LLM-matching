@@ -36,7 +36,6 @@ REQUIRED_REPORTING_FLAGS = (
     "F_MEDUC",
     "F_CIGS_0",
     "F_M_HT",
-    "F_PWGT",
     "F_RF_PDIAB",
     "F_RF_PHYPER",
 )
@@ -263,8 +262,10 @@ def main():
 The analysis cohort files apply the flag-aware complete-case rule for all
 primary covariates, including birth year in the supported 2016-2024 range.
 Values must use recognized, non-unknown codes; reporting
-flags `F_MHISP`, `F_MEDUC`, `F_CIGS_0`, `F_M_HT`, `F_PWGT`, `F_RF_PDIAB`, and
-`F_RF_PHYPER` must equal `1`. CDC-imputed age, race, and sex values remain
+flags `F_MHISP`, `F_MEDUC`, `F_CIGS_0`, `F_M_HT`, `F_RF_PDIAB`, and
+`F_RF_PHYPER` must equal `1`. `F_PWGT` is retained as a source-data audit
+field but is not an eligibility requirement because the selected covariate is
+the valid `BMI_R` recode, not `PWgt_R`. CDC-imputed age, race, and sex values remain
 eligible; their imputation flags are retained for audit. Gestational age is not
 part of this primary eligibility rule.
 """

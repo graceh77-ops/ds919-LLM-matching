@@ -21,8 +21,10 @@
   the resulting file is `data/processed/<year>/extracted_natality.csv`. The script
   adds `schema_version`, `birth_year`, and a year-prefixed unique
   `record_number`. The layouts' field positions are reviewed against their
-  annual guides; code harmonization and full-file extraction validation are
-  still required before pooled use.
+  annual guides; shared analysis codes have been reviewed. `F_PWGT` is retained
+  for audit but is not required for eligibility because the selected field is
+  `BMI_R`, not pre-pregnancy weight (`PWgt_R`). Full-file extraction validation
+  remains open before pooled use.
 - Initial extraction preserves values as strings and does not recode blanks,
   unknown values, or not-stated values, except for any explicit per-year
   `value_maps` documented in a layout.
@@ -58,7 +60,7 @@ before a pooled-year analysis.
 | `F_CIGS_2` | 267 | Reporting flag for second-trimester smoking |
 | `F_CIGS_3` | 268 | Reporting flag for third-trimester smoking |
 | `CIG_REC` | 269 | Pregnancy smoking recode: Y yes, N no, U unknown/not stated |
-| `BMI_R` | 287 | Maternal BMI category; 9 unknown/not stated |
+| `BMI_R` | 287 | Maternal body mass index category; 9 unknown/not stated; use `F_M_HT` as its reporting flag |
 | `F_M_HT` | 282 | Reporting flag for mother's height; CDC also directs use for BMI reporting |
 | `PWgt_R` | 292-294 | Pre-pregnancy weight recode; 999 unknown/not stated |
 | `F_PWGT` | 295 | Reporting flag for pre-pregnancy weight |
@@ -66,7 +68,7 @@ before a pooled-year analysis.
 | `RF_PHYPE` | 315 | Pre-pregnancy hypertension: Y yes, N no, U unknown/not stated |
 | `F_RF_PDIAB` | 319 | Reporting flag for pre-pregnancy diabetes; audit only |
 | `F_RF_PHYPER` | 321 | Reporting flag for pre-pregnancy hypertension; audit only |
-| `DPLURAL` | 454 | Plurality: 1 single, 2 twin, 3 triplet, 4 quadruplet or higher |
+| `DPLURAL` | 454 | Plurality: 1 single, 2 twin, 3 triplet, 4 quadruplet, 5 quintuplet or higher |
 | `SEX` | 475 | Infant sex: M male, F female |
 | `IMP_SEX` | 476 | Infant sex imputation flag; audit only |
 | `COMPGST_IMP` | 488 | Combined gestation imputation flag; audit only |

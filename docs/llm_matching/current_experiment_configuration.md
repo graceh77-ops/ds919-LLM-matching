@@ -4,9 +4,12 @@
 
 This document records the current implementation and configuration. Existing
 results below are historical 2024-only runs using the former ten-field schema.
-The active code schema now targets 2016-2024, but pooled analysis is pending
-annual layout verification, code harmonization, and new eleven-field LLM
-weight elicitation. The scope is the CDC Natality singleton cohort described in the
+The active code schema targets 2016-2024. Annual layouts and shared analysis
+codes have been reviewed against the CDC guides. `F_PWGT` is retained for audit
+but is not an eligibility requirement because the selected field is `BMI_R`,
+not pre-pregnancy weight. Validate the full annual extractions before creating
+a new pooled cohort. New eleven-field LLM
+weight elicitation is also pending. The scope is the CDC Natality singleton cohort described in the
 [maternal smoking analysis protocol](../../cdc%20natality/docs/protocal_maternal_smoking_dataset.md).
 
 ## Frozen shared configuration
@@ -14,7 +17,7 @@ weight elicitation. The scope is the CDC Natality singleton cohort described in 
 | Component | Current configuration |
 |---|---|
 | Default experiment input | `cdc natality/data/processed/pooled_2016_2024/analysis_cohort_singletons.csv`; the file will exist after annual extraction, combination, and cohort preparation |
-| Eligible cohort | 2016-2024 singleton births (`DPLURAL = 1`) with known smoking treatment, valid birth weight, flag-aware complete cases on the ten Natality covariates, and a valid birth year; annual layouts have been reviewed, while value-code harmonization and full-file extraction validation remain pending |
+| Eligible cohort | 2016-2024 singleton births (`DPLURAL = 1`) with known smoking treatment, valid birth weight, flag-aware complete cases on the ten Natality covariates, and a valid birth year; `F_PWGT` is audited but is not required for eligibility; full-file extraction validation remains open |
 | Treatment | `CIG_REC = Y` versus `CIG_REC = N` |
 | Outcome | Birth weight, grams (`DBWT`) |
 | Estimand | ATT for treated births in each eligible cohort partition |

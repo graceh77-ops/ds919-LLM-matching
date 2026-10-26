@@ -1,5 +1,10 @@
 # Full Data Quality Summary
 
+> Historical 2024 QC generated under the previous eligibility rule, which
+> required `F_PWGT = 1`. The current rule no longer requires `F_PWGT`; the
+> counts below have not been regenerated and must not be presented as current
+> eligible-cohort counts.
+
 ## Input and output
 
 - Input file: `data\processed\2024\extracted_natality.csv`

@@ -7,8 +7,11 @@ layouts can feed the same cohort-preparation and matching programs. Raw public-
 use files for **2016 through 2024** are present under `data/raw/<year>/`.
 Separate layout JSON files for each year are in `config/natality_layouts/` and
 their field positions have been reviewed against the matching CDC User Guide.
-Cross-year value-code harmonization and full-file extraction validation remain
-before pooled analysis. Year-agnostic means the analysis code can consume the
+Guide-based code harmonization is complete for the included variables and no
+year-specific value maps are currently indicated. `F_PWGT` is retained for
+audit but is not an eligibility requirement because the selected covariate is
+`BMI_R`, not `PWgt_R`. Validate every raw record during extraction before
+pooled analysis. Year-agnostic means the analysis code can consume the
 shared schema; it does not mean annual source files have the same field
 positions, code definitions, or reporting flags.
 
@@ -51,6 +54,43 @@ validated every line. The `fields` keys are canonical project names; their
 values are that year's 1-based inclusive source positions. Cross-year code
 definitions and reporting-flag behavior must still be checked before pooling;
 document any confirmed changes using explicit `value_maps`.
+
+## Code and reporting-flag harmonization review
+
+The project fields below use the same analysis codes in the 2016-2024 CDC User
+Guides. The extractor therefore preserves the original code strings; no
+year-specific `value_maps` are currently required. The cohort-preparation
+validators accept the recognized codes and exclude the guide-defined unknown
+codes.
+
+| Field | Accepted codes | Unknown / excluded codes | Cohort interpretation |
+|---|---|---|---|
+| `CIG_REC` | `Y`, `N` | `U` | Treatment: pregnant smoker versus nonsmoker |
+| `MAGER` | `12`-`50` | Not stated / unavailable | Code `12` represents ages 10-12; `50` represents 50 or older |
+| `MRACEHISP` | `1`-`7` | `8` | Race/Hispanic-origin recode; retain the seven reported levels |
+| `MEDUC` | `1`-`8` | `9` | Education level |
+| `CIG0_R` | `0`-`5` | `6` | Pre-pregnancy smoking recode |
+| `PRIORLIVE`, `PRIORDEAD` | `00`-`30` | `99` | Prior births, now living or dead |
+| `BMI_R` | `1`-`6` | `9` | BMI category |
+| `RF_PDIAB`, `RF_PHYPE` | `Y`, `N` | `U` | Pre-pregnancy diabetes and hypertension |
+| `SEX` | `M`, `F` | Blank / unavailable | Infant sex; imputed values remain eligible |
+| `DPLURAL` | `1`-`5` | `9` / unavailable | `1` single, `2` twin, `3` triplet, `4` quadruplet, `5` quintuplet or higher |
+| `DBWT` | `227`-`8165` grams | `9999`, blank, non-integer, or out of range | Edited birth weight in grams |
+
+The item reporting flags use `0` for non-reporting and `1` for reporting. The
+cohort rule requires `F_MHISP`, `F_MEDUC`, `F_CIGS_0`, `F_M_HT`,
+`F_RF_PDIAB`, and `F_RF_PHYPER` to equal `1`. CDC directs users to use
+`F_M_HT` (position 282) as the reporting flag for `BMI_R`; `F_PWGT` reports
+the separate pre-pregnancy weight field `PWgt_R`. Because the selected
+covariate is the BMI recode rather than weight itself, `F_PWGT` is retained as
+an audit field but does not determine eligibility. The `BMI_R` value must
+still be one of its recognized categories. Imputation flags for age, race,
+and sex are retained for audit and do not make otherwise recognized values
+ineligible.
+
+These shared code definitions are documented in the year-specific guides
+linked from `config/natality_layouts/<year>.json`. They are consistent across
+the reviewed 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, and 2024 guides.
 
 For a year whose variables or reporting rules cannot be mapped to the current
 schema without changing their meaning, stop and review the cohort rules. Do
@@ -104,7 +144,9 @@ the terminal is at the repository root, first run `Set-Location "cdc natality"`.
 
    Cohort preparation retains edited birth weights only from 227 through
    8,165 grams, excludes `DBWT = 9999`, and rejects blank, non-integer, and
-   out-of-range values, consistent with the CDC file-layout definition.
+   out-of-range values, consistent with the CDC file-layout definition. The
+   BMI eligibility uses a recognized `BMI_R` category and the CDC-specified
+   `F_M_HT = 1` reporting flag. `F_PWGT` is retained for audit only.
 
 4. Run the existing experiment against the prepared singleton file by passing
    its path to `src/run_matching_experiment.py --input ...`. The matching and
@@ -124,8 +166,9 @@ results and consider year-specific ATT summaries as a secondary description.
 
 The code schema now supports years 2016-2024. Nine annual layout JSON files
 have been prepared and their field positions reviewed against their
-year-specific guides. Cross-year value-code harmonization and extraction of
-the nine raw files remain before pooled estimates can be produced. Historical ten-field/23-column
+year-specific guides. Common analysis codes have been reviewed and require no
+year-specific value maps. Extract and validate the nine raw files before
+pooled estimates can be produced. Historical ten-field/23-column
 results remain archived and are not directly comparable to the new
 eleven-field/31-column design. Raw and processed datasets are local inputs and
 must not be committed to Git.

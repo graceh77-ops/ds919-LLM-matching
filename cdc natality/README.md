@@ -10,8 +10,10 @@ The active design targets 2016-2024 singleton births and includes `birth_year`
 as an eleventh categorical, LLM-weighted field. Raw public-use files for all
 nine years are present under `data/raw/<year>/`. A separate fixed-width layout
 JSON has been prepared for each year from 2016 through 2024 and checked against
-the corresponding CDC User Guide. Cross-year value-code harmonization and
-full-file extraction validation remain before pooling. Existing experiment outputs use the earlier
+the corresponding CDC User Guide. Shared code meanings are documented.
+`F_PWGT` is retained for audit but is not an eligibility requirement because
+the analysis uses `BMI_R`; full-file extraction validation remains before
+pooling. Existing experiment outputs use the earlier
 2024-only, ten-field design and are historical. The current AIPW and matching
 models are Natality-specific and do not automatically generalize to a
 different dataset.
@@ -51,8 +53,8 @@ foreach ($year in 2016..2024) {
 }
 ```
 
-After code harmonization and extraction checks are complete, combine the nine
-annual files and prepare the pooled analysis cohort using the commands in
+After validating the nine annual extractions, combine the files and prepare the pooled analysis
+cohort using the commands in
 [`docs/multi_year_data_pipeline.md`](docs/multi_year_data_pipeline.md).
 
 For an experiment, pass the prepared singleton cohort using `--input` and set

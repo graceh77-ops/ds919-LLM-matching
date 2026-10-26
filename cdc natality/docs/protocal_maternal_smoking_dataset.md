@@ -19,8 +19,10 @@ effect of maternal smoking during pregnancy on birth weight?
 
 - Start from annual extracted U.S. Natality records for 2016-2024, with one
   record per birth. Each annual layout JSON has been reviewed against its CDC
-  User Guide. Complete cross-year code harmonization and full-file extraction
-  validation before pooling; all nine raw annual files are present locally.
+  User Guide. Shared analysis codes have been reviewed; complete full-file
+  extraction validation before pooling. `F_PWGT` is retained for audit but is
+  not an eligibility requirement because the selected covariate is `BMI_R`,
+  not pre-pregnancy weight. All nine raw annual files are present locally.
 - Exclude records with unknown or invalid treatment status (`CIG_REC` other
   than `Y` or `N`). Do not classify unknown status as unexposed.
 - Exclude records with unavailable or invalid birth weight. `DBWT = 9999` is
@@ -31,16 +33,15 @@ effect of maternal smoking during pregnancy on birth weight?
 - Apply the flag-aware complete-case rule to both the singleton primary cohort
   and all-births sensitivity cohort: retain records only when every primary
   covariate has a recognized, non-unknown value and the reporting flags
-  `F_MHISP`, `F_MEDUC`, `F_CIGS_0`, `F_M_HT`, `F_PWGT`, `F_RF_PDIAB`, and
+  `F_MHISP`, `F_MEDUC`, `F_CIGS_0`, `F_M_HT`, `F_RF_PDIAB`, and
   `F_RF_PHYPER` equal `1`.
 - Do not exclude records solely because age, race, or sex was CDC-imputed;
   retain those values and report their imputation flags. Gestational-age
   variables and flags do not determine primary cohort eligibility.
-- The flag-aware rule retained 3,336,235 of 3,506,582 singleton records
-  (95.14%) in the covariate missingness audit. The code-based complete-case
-  rule without reporting-flag requirements retained 3,344,587 (95.38%) and is
-  reported as an eligibility comparison only; the primary cohort uses the
-  flag-aware rule.
+- The existing 2024 missingness audit reports counts from the previous
+  flag-aware definition, which required `F_PWGT = 1`. Those counts are
+  historical and do not describe the updated eligibility rule; regenerate the
+  cohort and QC summaries before reporting current eligible counts.
 - The cohort counts above are pre-covariate counts. The corresponding file
   paths and QC details are in [`../results/full_data_qc_summary.md`](../results/full_data_qc_summary.md).
 

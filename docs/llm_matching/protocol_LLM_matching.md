@@ -90,10 +90,12 @@ matching, so its 1% test sample contains about 800 treated births before
 matching. The pooled 2016-2024 design adds calendar year as an eleventh,
 categorical, LLM-weighted adjustment field. Year is represented by eight
 fixed Helmert contrasts; a single field-level LLM score maps to those columns
-using the documented repeated-weight rule. Annual layouts and codes still
-have guide-reviewed layouts, but value-code harmonization and full-file
-extraction validation remain. Do not run pooled
-comparisons until the year-specific inputs and coding have passed review.
+using the documented repeated-weight rule. Annual layouts and shared analysis
+codes have been reviewed against the CDC guides. `F_PWGT` is retained for
+audit but is not an eligibility requirement: the selected covariate is the
+BMI recode `BMI_R`, with `F_M_HT` as its reporting flag. Validate the full
+annual extractions before creating the pooled cohort. Do not run pooled
+comparisons until validation is complete.
 
 The historical runs used one split and seed `20261022`. A final repetition
 count and seed procedure have not been selected. Record and freeze them before
