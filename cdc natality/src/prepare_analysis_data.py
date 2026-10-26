@@ -12,6 +12,8 @@ TREATMENT_COLUMN = "CIG_REC"
 OUTCOME_COLUMN = "DBWT"
 DPLURAL_COLUMN = "DPLURAL"
 MISSING_OUTCOME_CODE = 9999
+MIN_VALID_BIRTHWEIGHT_G = 227
+MAX_VALID_BIRTHWEIGHT_G = 8165
 
 # Values must be recognized, and these item-level reporting flags must confirm
 # that the source item was reported. Imputation flags for age, race, and sex do
@@ -132,9 +134,14 @@ def main():
                 outcome_text = (row.get(OUTCOME_COLUMN) or "").strip()
                 try:
                     birthweight = int(outcome_text)
-                    outcome_valid = birthweight != MISSING_OUTCOME_CODE
                     if birthweight == MISSING_OUTCOME_CODE:
+                        outcome_valid = False
                         dbwt_9999_count += 1
+                    elif MIN_VALID_BIRTHWEIGHT_G <= birthweight <= MAX_VALID_BIRTHWEIGHT_G:
+                        outcome_valid = True
+                    else:
+                        outcome_valid = False
+                        invalid_dbwt_count += 1
                 except ValueError:
                     birthweight = None
                     outcome_valid = False
@@ -233,7 +240,7 @@ def main():
 - Missing or invalid birth weight only: {excluded_outcome_only:,}
 - Both treatment and birth weight invalid or missing: {excluded_both:,}
 - `DBWT` equal to the missing code `9999`: {dbwt_9999_count:,}
-- Blank or non-integer `DBWT`: {invalid_dbwt_count:,}
+- `DBWT` outside 227-8,165 grams, blank, or non-integer: {invalid_dbwt_count:,}
 
 ## Analysis cohort
 

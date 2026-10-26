@@ -102,6 +102,10 @@ the terminal is at the repository root, first run `Set-Location "cdc natality"`.
    The singleton and all-births analysis files are written beside the input;
    the QC report is written under `results/`.
 
+   Cohort preparation retains edited birth weights only from 227 through
+   8,165 grams, excludes `DBWT = 9999`, and rejects blank, non-integer, and
+   out-of-range values, consistent with the CDC file-layout definition.
+
 4. Run the existing experiment against the prepared singleton file by passing
    its path to `src/run_matching_experiment.py --input ...`. The matching and
    AIPW implementations require the same canonical covariate and derived

@@ -82,9 +82,10 @@ before a pooled-year analysis.
 - Primary treatment: `CIG_REC`; `Y` is treated, `N` is comparison, and `U` is
   unknown and excluded. Trimester-specific smoking recodes are retained to
   describe and audit the classification.
-- Primary outcome: `DBWT`, birth weight in grams. Exclude 9999 and unavailable
-  or invalid values. `BWTR12` and `BWTR4` are categorical alternatives, not
-  matching covariates.
+- Primary outcome: `DBWT`, birth weight in grams. Retain values from 227 to
+  8,165; exclude 9999 (not stated), blanks, non-integers, and values outside
+  that range. `BWTR12` and `BWTR4` are categorical alternatives, not matching
+  covariates.
 - The current cohort definitions and QC counts are in
   [`protocal_maternal_smoking_dataset.md`](protocal_maternal_smoking_dataset.md) and
   [`../results/full_data_qc_summary.md`](../results/full_data_qc_summary.md).

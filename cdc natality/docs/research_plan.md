@@ -21,7 +21,8 @@ when estimating the effect of maternal smoking during pregnancy on birth weight?
 ## 4. Outcome
 - Concept: birth weight
 - Measurement: edited birth weight in grams (`DBWT`)
-- `9999` is not stated; unavailable or invalid values are excluded.
+- Retain `DBWT` values from 227 to 8,165 grams; `9999` is not stated, and
+  blank, non-integer, or out-of-range values are excluded.
 
 ## 5. Covariates
 - Selected primary set: `MAGER`, `MRACEHISP`, `MEDUC`, `CIG0_R`, `PRIORLIVE`,

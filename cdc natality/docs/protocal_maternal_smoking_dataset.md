@@ -24,8 +24,8 @@ effect of maternal smoking during pregnancy on birth weight?
 - Exclude records with unknown or invalid treatment status (`CIG_REC` other
   than `Y` or `N`). Do not classify unknown status as unexposed.
 - Exclude records with unavailable or invalid birth weight. `DBWT = 9999` is
-  the not-stated code; blank or non-integer values are invalid. The User Guide
-  lists edited birth weights from 227 through 8,165 grams.
+  the not-stated code; retain edited birth weights only from 227 through 8,165
+  grams. Blank, non-integer, and out-of-range values are invalid.
 - For the primary cohort, additionally retain only `DPLURAL = 1`. Keep
   multiple births in the all-births sensitivity cohort.
 - Apply the flag-aware complete-case rule to both the singleton primary cohort
