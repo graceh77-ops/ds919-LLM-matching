@@ -8,8 +8,10 @@ The active code schema targets 2016-2024. Annual layouts and shared analysis
 codes have been reviewed against the CDC guides. `F_PWGT` is retained for audit
 but is not an eligibility requirement because the selected field is `BMI_R`,
 not pre-pregnancy weight. All nine annual extractions are complete (33,589,282
-records), and the pooled singleton cohort contains 30,924,495 births. New eleven-field LLM
-weight elicitation is also pending. The scope is the CDC Natality singleton cohort described in the
+records), and the pooled singleton cohort contains 30,924,495 births. The new
+outcome-blind eleven-field DeepSeek vector is saved under
+`cdc natality/results/matching results_2016-2024/deepseek_api/20261026T052201Z/`.
+The scope is the CDC Natality singleton cohort described in the
 [maternal smoking analysis protocol](../../cdc%20natality/docs/protocal_maternal_smoking_dataset.md).
 
 ## Frozen shared configuration
@@ -27,7 +29,7 @@ weight elicitation is also pending. The scope is the CDC Natality singleton coho
 | Eigenvalue floor | `1e-8` times the largest covariance eigenvalue; floor every lower eigenvalue at that threshold before inverse-square-root construction |
 | Generalized Mahalanobis | `d_V(x_i,x_j) = sqrt((x_i-x_j)' S^(-1/2) V S^(-1/2)(x_i-x_j))`; identity method uses `V = I` |
 | Field-weight mapping | Rescale eleven nonnegative field scores to mean 1, then repeat each field score on all columns from that field; column-normalized allocation is a separately labeled sensitivity method |
-| LLM weights | Prior ten-field weights are historical and cannot be loaded for the new schema. Elicit a new outcome-blind eleven-field vector and pass it explicitly with `--weights-json`; the same vector applies across all splits. |
+| LLM weights | The outcome-blind eleven-field DeepSeek vector is passed explicitly with `--weights-json`; the same vector applies across all splits. Prior ten-field weights remain historical. |
 | PCA comparator | Z-standardize all 31 encoded columns using pooled 1% test covariates (`ddof = 0`); fit PCA there; retain the minimum component count reaching 90% cumulative explained variance; use ordinary Mahalanobis distance from retained score covariance, with the `1e-8` relative eigenvalue floor and no additional explained-variance weighting |
 | Match rule | 1:1 nearest neighbor, with replacement, no caliper; ties within the coded tolerance resolve to the smallest source `record_number` |
 | Split | Treatment-by-year-stratified random 99% reference / 1% test, without replacement within each stratum; use the same split for methods in a repetition |
@@ -42,15 +44,32 @@ resampling, not independent validation or external replication.
 
 ## Preprocessing memory behavior
 
-`fit_natality_transform()` now fits field means, scales, and the 31-column
-sample covariance in 100,000-row batches. It combines batch covariance moments
-with online updates, so it does not allocate the full cohort's encoded matrix.
-The transformation and covariance definitions are unchanged. The input
-DataFrame is still held in memory, and the experiment currently creates
-reference and test subsets from it; this change reduces preprocessing's
-temporary encoded-matrix memory but does not yet make the complete experiment
-out-of-core. The reference propensity and AIPW calculations already process
-their model and diagnostic calculations in batches.
+The matching runner now reads the prepared cohort in 200,000-row CSV batches.
+It counts treatment-by-year strata, selects an exact rounded 1% test sample by
+streamed random priorities, and loads only those test rows for matching. It
+reopens the source CSV to yield the 99% reference rows in batches to the
+reference preprocessing, propensity, outcome-regression, and AIPW routines.
+The full cohort and a full reference DataFrame are no longer resident in RAM.
+The pilot option also selects its requested rows through streaming passes.
+
+The reference covariance and regression calculations preserve the existing
+31-column encoding and formulas. Propensity optimization rereads the reference
+CSV for each objective evaluation, so this trades memory use for additional
+runtime and disk reads. AIPW totals, effective sample size, clipping count,
+balance moments, extrema, and overlap-range counts are accumulated across all
+reference rows. The reported weight and propensity quantiles use a uniform
+priority sample capped at 100,000 observations per diagnostic distribution;
+the output includes fields identifying the sample size and that these quantiles
+are approximate. Maximum and minimum values remain exact. The matching test
+cohort and its encoded/PCA workspaces are still held in memory, so this change
+reduces but cannot guarantee a run will fit within any particular RAM limit.
+
+The streamed split uses a seeded uniform priority sample within each
+treatment-by-year stratum and keeps the same rounded test count as before.
+This preserves the split design but will generally select different records
+than the previous full-DataFrame permutation for the same seed. Repeated runs
+with the new implementation are reproducible under the same seed, input order,
+and software environment.
 
 ## Method status
 
@@ -60,10 +79,9 @@ their model and diagnostic calculations in batches.
   and a robust influence-function standard error with a 95% Wald interval.
 - **IPW-ATT and outcome-regression ATT:** separate reference sensitivity
   estimates; do not average them with AIPW.
-- **LLM field weighting:** Existing manual-chat and DeepSeek weights are
-  historical ten-field vectors. A new outcome-blind eleven-field vector must
-  be elicited for this schema and supplied explicitly; no weight file is
-  silently selected as the default.
+- **LLM field weighting:** The current outcome-blind DeepSeek eleven-field
+  vector is supplied explicitly to the runner. Historical ten-field vectors
+  cannot be loaded under this schema.
 - **Identity generalized Mahalanobis:** matching comparator evaluated within
   the 1% test cohort, on the same footing as PSM and LLM-weighted matching.
 - **PSM:** The unpenalized logistic model uses the 31 encoded covariates and is

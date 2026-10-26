@@ -70,6 +70,14 @@ Prior ten-field weight files cannot be used with the pooled-year schema. See
 the experiment configuration and multi-year pipeline documentation before
 running pooled-year comparisons.
 
+The experiment runner streams the cohort CSV in batches, retains only each
+split's test rows for matching, and streams reference rows through the AIPW
+calculations. This reduces RAM use substantially, while adding repeated disk
+reads during propensity-model fitting. The test cohort and PCA/matching
+workspaces still use RAM, so check available memory before a full run. Reference
+weight and propensity quantiles are estimated from a bounded random sample;
+their sample sizes and approximate status are recorded in the detailed output.
+
 Python dependencies are listed in the repository-root `requirements.txt`.
 Install them from the repository root with:
 

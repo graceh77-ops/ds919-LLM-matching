@@ -8,7 +8,7 @@ task, then reuse the resulting object to transform its rows consistently.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping, Sequence
+from typing import Callable, Iterable, Mapping, Sequence
 
 import numpy as np
 import pandas as pd
@@ -312,21 +312,32 @@ def estimate_att(
 
 
 def fit_natality_transform(
-    cohort: pd.DataFrame,
+    cohort: pd.DataFrame | Callable[[], Iterable[pd.DataFrame]],
     chunk_rows: int = 100_000,
+    cohort_size: int | None = None,
 ) -> NatalityFeatureTransform:
-    """Fit fixed 31-column encoding and covariance in bounded row batches.
+    """Fit the fixed 31-column transform from a frame or a repeatable batch source.
 
-    The input DataFrame remains resident in memory, but temporary encoded
-    arrays are limited to ``chunk_rows`` instead of the full cohort. Cohort
-    moments and covariance are combined with stable online updates.
+    A callable source must return a fresh iterator on each call and provide
+    ``cohort_size``. This lets the full-cohort runner estimate moments and
+    covariance without retaining reference rows in memory.
     """
-    required = set(FIELD_ORDER)
-    missing = required - set(cohort.columns)
-    if missing:
-        raise ValueError(f"Missing required covariate columns: {sorted(missing)}")
-    if cohort.empty:
-        raise ValueError("The cohort used to fit preprocessing is empty.")
+    if isinstance(cohort, pd.DataFrame):
+        required = set(FIELD_ORDER)
+        missing = required - set(cohort.columns)
+        if missing:
+            raise ValueError(f"Missing required covariate columns: {sorted(missing)}")
+        if cohort.empty:
+            raise ValueError("The cohort used to fit preprocessing is empty.")
+        cohort_size = len(cohort)
+
+        def batches() -> Iterable[pd.DataFrame]:
+            for start in range(0, len(cohort), chunk_rows):
+                yield cohort.iloc[start : start + chunk_rows]
+    else:
+        if cohort_size is None or cohort_size < 1:
+            raise ValueError("cohort_size is required for a batch source.")
+        batches = cohort
     if chunk_rows < 1:
         raise ValueError("chunk_rows must be at least 1.")
 
@@ -349,9 +360,10 @@ def fit_natality_transform(
     }
     binary_positive_counts = {field: 0 for field in BINARY_FIELDS}
 
-    for start in range(0, len(cohort), chunk_rows):
-        batch = cohort.iloc[start : start + chunk_rows]
+    observed_count = 0
+    for batch in batches():
         batch_count = len(batch)
+        observed_count += batch_count
         for field in NUMERIC_FIELDS:
             values = pd.to_numeric(batch[field], errors="raise").to_numpy(dtype=np.float64)
             batch_mean = float(values.mean())
@@ -383,6 +395,11 @@ def fit_natality_transform(
                 raise ValueError(f"Unrecognized {field} categories: {invalid}")
             binary_positive_counts[field] += int((values == levels[1]).sum())
 
+    if observed_count != cohort_size:
+        raise ValueError(
+            f"Batch source yielded {observed_count} rows; expected {cohort_size}."
+        )
+
     for field in FIELD_ORDER:
         if field in NUMERIC_FIELDS:
             mean = numeric_running_means[field]
@@ -395,12 +412,12 @@ def fit_natality_transform(
         elif field in CATEGORICAL_FIELDS:
             levels = CATEGORY_LEVELS[field]
             contrasts = _helmert_contrasts(len(levels)).T
-            mean = (category_counts[field] @ contrasts) / len(cohort)
+            mean = (category_counts[field] @ contrasts) / cohort_size
             categorical_means[field] = mean
             names = [f"{field}_helmert_{index + 1}" for index in range(len(levels) - 1)]
         else:
             levels = BINARY_LEVELS[field]
-            mean = binary_positive_counts[field] / len(cohort)
+            mean = binary_positive_counts[field] / cohort_size
             binary_means[field] = mean
             names = [f"{field}_contrast"]
 
@@ -413,8 +430,7 @@ def fit_natality_transform(
     covariance_count = 0
     covariance_mean = np.zeros(offset, dtype=np.float64)
     covariance_m2 = np.zeros((offset, offset), dtype=np.float64)
-    for start in range(0, len(cohort), chunk_rows):
-        batch = cohort.iloc[start : start + chunk_rows]
+    for batch in batches():
         encoded = _encode_features(
             batch,
             numeric_means,
@@ -435,6 +451,10 @@ def fit_natality_transform(
         covariance_mean += delta * batch_count / combined_count
         covariance_count = combined_count
 
+    if covariance_count != cohort_size:
+        raise ValueError(
+            f"Batch source yielded {covariance_count} covariance rows; expected {cohort_size}."
+        )
     covariance = covariance_m2 / (covariance_count - 1)
     eigenvalues, eigenvectors = np.linalg.eigh(covariance)
     largest = float(eigenvalues[-1])

@@ -7,7 +7,7 @@ import csv
 import json
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Iterable
 
 import numpy as np
 import pandas as pd
@@ -41,6 +41,8 @@ DEFAULT_WEIGHTS_JSON = None
 DEFAULT_TEST_FRACTION = 0.01
 PCA_CUMULATIVE_VARIANCE_THRESHOLD = 0.90
 REFERENCE_MODEL_CHUNK_SIZE = 100_000
+CSV_CHUNK_SIZE = 200_000
+REFERENCE_DIAGNOSTIC_SAMPLE_SIZE = 100_000
 PROPENSITY_CLIP_EPSILON = 1e-6
 
 INPUT_COLUMNS = [
@@ -99,6 +101,144 @@ def _stratified_split(
     test_indices = np.sort(np.concatenate(test_parts))
     reference_indices = np.sort(np.concatenate(reference_parts))
     return reference_indices, test_indices
+
+
+def _read_input_chunks(input_path: Path) -> Iterable[pd.DataFrame]:
+    """Reopen the prepared cohort as typed CSV batches for bounded-memory work."""
+    return pd.read_csv(
+        input_path,
+        usecols=INPUT_COLUMNS,
+        dtype=INPUT_DTYPES,
+        low_memory=False,
+        chunksize=CSV_CHUNK_SIZE,
+    )
+
+
+def _make_streamed_split(
+    input_path: Path,
+    test_fraction: float,
+    seed: int,
+) -> tuple[pd.DataFrame, Callable[[], Iterable[pd.DataFrame]], dict[str, int]]:
+    """Build an exact-size treatment-by-year split without loading reference rows.
+
+    Two sequential CSV scans count strata and select a reproducible uniform
+    priority sample. A third scan materializes only selected test rows. The
+    returned callable reopens the CSV and yields reference batches on demand.
+    """
+    stratum_sizes: dict[tuple[int, int], int] = {}
+    totals = {"rows": 0, "treated": 0}
+    for chunk in _read_input_chunks(input_path):
+        treatment = chunk["treatment_binary"].to_numpy(dtype=np.int8)
+        if not np.isin(treatment, (0, 1)).all():
+            raise ValueError("treatment_binary must contain only 0 and 1.")
+        if chunk["record_number"].duplicated().any():
+            raise ValueError("Duplicate record_number values found within an input batch.")
+        totals["rows"] += len(chunk)
+        totals["treated"] += int(treatment.sum())
+        counts = chunk.groupby(["treatment_binary", "birth_year"], observed=True).size()
+        for (treatment_value, birth_year), count in counts.items():
+            key = (int(treatment_value), int(birth_year))
+            stratum_sizes[key] = stratum_sizes.get(key, 0) + int(count)
+    print(f"Counted {totals['rows']:,} cohort rows across {len(stratum_sizes)} strata.")
+
+    test_sizes: dict[tuple[int, int], int] = {}
+    for key, size in stratum_sizes.items():
+        if size < 2:
+            raise ValueError(f"Treatment-by-year stratum {key} has fewer than two records.")
+        test_count = max(1, int(np.floor(size * test_fraction + 0.5)))
+        if test_count >= size:
+            raise ValueError(f"Test fraction leaves no reference rows in stratum {key}.")
+        test_sizes[key] = test_count
+
+    rng = np.random.default_rng(seed)
+    priorities: dict[tuple[int, int], np.ndarray] = {}
+    record_ids: dict[tuple[int, int], np.ndarray] = {}
+    for chunk in _read_input_chunks(input_path):
+        score = rng.random(len(chunk))
+        treatment = chunk["treatment_binary"].to_numpy(dtype=np.int8)
+        years = pd.to_numeric(chunk["birth_year"], errors="raise").to_numpy(dtype=np.int16)
+        for treatment_value, birth_year in np.unique(
+            np.column_stack((treatment, years)), axis=0
+        ):
+            key = (int(treatment_value), int(birth_year))
+            mask = (treatment == key[0]) & (years == key[1])
+            combined_scores = np.concatenate((priorities.get(key, np.empty(0)), score[mask]))
+            combined_ids = np.concatenate((
+                record_ids.get(key, np.empty(0, dtype=np.int64)),
+                chunk.loc[mask, "record_number"].to_numpy(dtype=np.int64),
+            ))
+            keep_count = test_sizes[key]
+            if len(combined_scores) > keep_count:
+                keep = np.argpartition(combined_scores, keep_count - 1)[:keep_count]
+                combined_scores = combined_scores[keep]
+                combined_ids = combined_ids[keep]
+            priorities[key] = combined_scores
+            record_ids[key] = combined_ids
+
+    test_ids = np.concatenate(list(record_ids.values()))
+    if len(test_ids) != sum(test_sizes.values()):
+        raise RuntimeError("Streamed split selection did not retain the expected test count.")
+    print(f"Selected {len(test_ids):,} test rows; extracting only those rows for matching.")
+    test_id_set = set(test_ids.tolist())
+    test_frames = [
+        chunk.loc[chunk["record_number"].isin(test_id_set)].copy()
+        for chunk in _read_input_chunks(input_path)
+        if chunk["record_number"].isin(test_id_set).any()
+    ]
+    test = pd.concat(test_frames, ignore_index=True)
+    if len(test) != len(test_ids) or test["record_number"].duplicated().any():
+        raise ValueError("Test-row extraction did not align with selected unique records.")
+
+    def reference_batches() -> Iterable[pd.DataFrame]:
+        for chunk in _read_input_chunks(input_path):
+            reference_batch = chunk.loc[~chunk["record_number"].isin(test_id_set)]
+            if not reference_batch.empty:
+                yield reference_batch.reset_index(drop=True)
+
+    test_treated = int(test["treatment_binary"].sum())
+    reference_counts = {
+        "rows": totals["rows"] - len(test),
+        "treated": totals["treated"] - test_treated,
+        "controls": (totals["rows"] - totals["treated"])
+        - (len(test) - test_treated),
+        "test_rows": len(test),
+    }
+    return test, reference_batches, reference_counts
+
+
+def _load_streamed_pilot(input_path: Path, pilot_rows: int, seed: int) -> pd.DataFrame:
+    """Select a reproducible simple random pilot without reading the full CSV."""
+    row_count = 0
+    for chunk in _read_input_chunks(input_path):
+        row_count += len(chunk)
+    if pilot_rows > row_count:
+        raise ValueError(f"pilot_rows ({pilot_rows}) exceeds cohort size ({row_count}).")
+    rng = np.random.default_rng(seed)
+    priorities = np.empty(0, dtype=np.float64)
+    record_ids = np.empty(0, dtype=np.int64)
+    for chunk in _read_input_chunks(input_path):
+        candidate_priorities = np.concatenate((priorities, rng.random(len(chunk))))
+        candidate_ids = np.concatenate((
+            record_ids,
+            chunk["record_number"].to_numpy(dtype=np.int64),
+        ))
+        if len(candidate_ids) > pilot_rows:
+            keep = np.argpartition(candidate_priorities, pilot_rows - 1)[:pilot_rows]
+            priorities = candidate_priorities[keep]
+            record_ids = candidate_ids[keep]
+        else:
+            priorities = candidate_priorities
+            record_ids = candidate_ids
+    selected_ids = set(record_ids.tolist())
+    frames = [
+        chunk.loc[chunk["record_number"].isin(selected_ids)].copy()
+        for chunk in _read_input_chunks(input_path)
+        if chunk["record_number"].isin(selected_ids).any()
+    ]
+    pilot = pd.concat(frames, ignore_index=True)
+    if len(pilot) != pilot_rows or pilot["record_number"].duplicated().any():
+        raise ValueError("Pilot-row selection did not return the expected unique records.")
+    return pilot
 
 
 def _match_one_method(
@@ -184,35 +324,49 @@ def _match_one_method(
 
 
 def _fit_propensity_model(
-    cohort: pd.DataFrame,
+    cohort: pd.DataFrame | Callable[[], Iterable[pd.DataFrame]],
     transform: Any,
     chunk_size: int = 100_000,
+    cohort_size: int | None = None,
+    treated_count: int | None = None,
 ) -> np.ndarray:
-    """Fit an unpenalized logistic propensity model in memory-bounded batches.
+    """Fit unpenalized logistic regression from a frame or repeatable batch source.
 
     Returns the coefficients for an intercept followed by the shared encoded
     covariate columns. The fitting objective and gradient are accumulated over
     chunks so the full cohort design matrix need not remain in memory.
     """
-    treatment = cohort["treatment_binary"].to_numpy(dtype=np.float64)
-    treated_fraction = float(treatment.mean())
+    if isinstance(cohort, pd.DataFrame):
+        cohort_size = len(cohort)
+        treated_count = int(cohort["treatment_binary"].sum())
+
+        def batches() -> Iterable[pd.DataFrame]:
+            for start in range(0, len(cohort), chunk_size):
+                yield cohort.iloc[start : start + chunk_size]
+    else:
+        if cohort_size is None or treated_count is None:
+            raise ValueError("cohort_size and treated_count are required for a batch source.")
+        batches = cohort
+    if cohort_size is None or treated_count is None or cohort_size < 1:
+        raise ValueError("Invalid cohort counts for propensity fitting.")
+    treated_fraction = float(treated_count / cohort_size)
     if not 0.0 < treated_fraction < 1.0:
         raise ValueError("Propensity-model cohort must contain both treatment groups.")
 
     initial = np.zeros(len(transform.feature_names) + 1, dtype=np.float64)
     initial[0] = np.log(treated_fraction / (1.0 - treated_fraction))
-    row_count = len(cohort)
+    row_count = cohort_size
 
     def objective_and_gradient(coefficients: np.ndarray) -> tuple[float, np.ndarray]:
         intercept = coefficients[0]
         feature_coefficients = coefficients[1:]
         total_loss = 0.0
         total_gradient = np.zeros_like(coefficients)
-        for start in range(0, row_count, chunk_size):
-            stop = min(start + chunk_size, row_count)
-            rows = cohort.iloc[start:stop]
+        observed_count = 0
+        for rows in batches():
+            observed_count += len(rows)
             features = transform.transform(rows)
-            y = treatment[start:stop]
+            y = rows["treatment_binary"].to_numpy(dtype=np.float64)
             linear_predictor = intercept + features @ feature_coefficients
             total_loss += np.logaddexp(0.0, linear_predictor).sum() - np.dot(
                 y, linear_predictor
@@ -220,13 +374,26 @@ def _fit_propensity_model(
             residual = expit(linear_predictor) - y
             total_gradient[0] += residual.sum()
             total_gradient[1:] += features.T @ residual
+        if observed_count != row_count:
+            raise ValueError(
+                f"Batch source yielded {observed_count} rows; expected {row_count}."
+            )
         return total_loss / row_count, total_gradient / row_count
+
+    iteration = 0
+
+    def report_iteration(_: np.ndarray) -> None:
+        nonlocal iteration
+        iteration += 1
+        if iteration == 1 or iteration % 5 == 0:
+            print(f"Reference propensity optimization iteration {iteration}.")
 
     fit = minimize(
         objective_and_gradient,
         initial,
         method="L-BFGS-B",
         jac=True,
+        callback=report_iteration,
         options={"maxiter": 100, "ftol": 1e-10},
     )
     if not fit.success:
@@ -235,31 +402,48 @@ def _fit_propensity_model(
 
 
 def _fit_reference_control_outcome(
-    reference: pd.DataFrame,
+    reference: pd.DataFrame | Callable[[], Iterable[pd.DataFrame]],
     transform: Any,
     chunk_size: int = REFERENCE_MODEL_CHUNK_SIZE,
+    control_count: int | None = None,
 ) -> np.ndarray:
     """Fit OLS birth weight on an intercept and encoded covariates among controls.
 
     Incremental QR keeps the design matrix bounded to one chunk, while avoiding
     the numerical instability of solving the normal equations.
     """
-    treatment = reference["treatment_binary"].to_numpy(dtype=np.int8)
-    control_indices = np.flatnonzero(treatment == 0)
-    if len(control_indices) <= len(transform.feature_names):
+    if isinstance(reference, pd.DataFrame):
+        control_count = int((reference["treatment_binary"] == 0).sum())
+
+        def batches() -> Iterable[pd.DataFrame]:
+            for start in range(0, len(reference), chunk_size):
+                yield reference.iloc[start : start + chunk_size]
+    else:
+        if control_count is None:
+            raise ValueError("control_count is required for a reference batch source.")
+        batches = reference
+    if control_count is None or control_count <= len(transform.feature_names):
         raise ValueError("Too few reference controls to fit the outcome model.")
 
     triangular = None
     column_count = len(transform.feature_names) + 2  # intercept, covariates, outcome
-    for start in range(0, len(control_indices), chunk_size):
-        indices = control_indices[start : start + chunk_size]
-        rows = reference.iloc[indices]
+    observed_controls = 0
+    for batch in batches():
+        rows = batch.loc[batch["treatment_binary"] == 0]
+        if rows.empty:
+            continue
+        observed_controls += len(rows)
         features = transform.transform(rows)
         design = np.column_stack((np.ones(len(rows), dtype=np.float64), features))
         outcome = rows["birthweight_g"].to_numpy(dtype=np.float64)
         augmented = np.column_stack((design, outcome))
         stack = augmented if triangular is None else np.vstack((triangular, augmented))
         triangular = np.linalg.qr(stack, mode="r")
+
+    if observed_controls != control_count:
+        raise ValueError(
+            f"Batch source yielded {observed_controls} controls; expected {control_count}."
+        )
 
     coefficient_count = len(transform.feature_names) + 1
     coefficients, _, _, _ = np.linalg.lstsq(
@@ -276,12 +460,35 @@ def _quantile_diagnostics(prefix: str, values: np.ndarray) -> dict[str, float]:
     return {f"{prefix}_{suffix}": float(value) for suffix, value in zip(suffixes, quantiles)}
 
 
+def _update_priority_sample(
+    priorities: np.ndarray,
+    values: np.ndarray,
+    new_values: np.ndarray,
+    rng: np.random.Generator,
+    capacity: int = REFERENCE_DIAGNOSTIC_SAMPLE_SIZE,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Keep a bounded uniform priority sample for reference quantiles."""
+    if len(new_values) == 0:
+        return priorities, values
+    new_priorities = rng.random(len(new_values))
+    all_priorities = np.concatenate((priorities, new_priorities))
+    all_values = np.concatenate((values, new_values))
+    if len(all_values) > capacity:
+        keep = np.argpartition(all_priorities, capacity - 1)[:capacity]
+        all_priorities = all_priorities[keep]
+        all_values = all_values[keep]
+    return all_priorities, all_values
+
+
 def _reference_aipw_estimates(
-    reference: pd.DataFrame,
+    reference: pd.DataFrame | Callable[[], Iterable[pd.DataFrame]],
     transform: Any,
     propensity_coefficients: np.ndarray,
     control_outcome_coefficients: np.ndarray,
     chunk_size: int = REFERENCE_MODEL_CHUNK_SIZE,
+    cohort_size: int | None = None,
+    treated_count: int | None = None,
+    control_count: int | None = None,
 ) -> dict[str, Any]:
     """Calculate reference AIPW-ATT, IPW-ATT, OR-ATT, and AIPW diagnostics.
 
@@ -290,18 +497,40 @@ def _reference_aipw_estimates(
     odds weights use propensities clipped to [1e-6, 1 - 1e-6] for numerical
     stability; raw propensity scores are retained for overlap diagnostics.
     """
-    treatment = reference["treatment_binary"].to_numpy(dtype=np.int8)
-    treated_count = int(np.count_nonzero(treatment == 1))
-    control_count = int(np.count_nonzero(treatment == 0))
+    if isinstance(reference, pd.DataFrame):
+        cohort_size = len(reference)
+        treated_count = int((reference["treatment_binary"] == 1).sum())
+        control_count = cohort_size - treated_count
+
+        def batches() -> Iterable[pd.DataFrame]:
+            for start in range(0, len(reference), chunk_size):
+                yield reference.iloc[start : start + chunk_size]
+    else:
+        if cohort_size is None or treated_count is None or control_count is None:
+            raise ValueError("Reference row and treatment counts are required for batch input.")
+        batches = reference
+    if treated_count is None or control_count is None:
+        raise ValueError("Invalid reference treatment counts.")
     if treated_count == 0 or control_count == 0:
         raise ValueError("Reference cohort must contain treated and control records.")
 
     feature_count = len(transform.feature_names)
-    treated_propensity = np.empty(treated_count, dtype=np.float64)
-    control_propensity = np.empty(control_count, dtype=np.float64)
-    control_weights = np.empty(control_count, dtype=np.float64)
-    treated_cursor = 0
-    control_cursor = 0
+    rng = np.random.default_rng(5489)
+    treated_priorities = np.empty(0, dtype=np.float64)
+    treated_propensity = np.empty(0, dtype=np.float64)
+    control_priorities = np.empty(0, dtype=np.float64)
+    control_propensity = np.empty(0, dtype=np.float64)
+    weight_priorities = np.empty(0, dtype=np.float64)
+    control_weights = np.empty(0, dtype=np.float64)
+    treated_propensity_min = np.inf
+    treated_propensity_max = -np.inf
+    control_propensity_min = np.inf
+    control_propensity_max = -np.inf
+    control_weight_min = np.inf
+    control_weight_max = -np.inf
+    observed_treated = 0
+    observed_controls = 0
+    clipped_count = 0
 
     treated_residual_sum = 0.0
     treated_outcome_sum = 0.0
@@ -318,11 +547,10 @@ def _reference_aipw_estimates(
     weighted_control_feature_sum = np.zeros(feature_count, dtype=np.float64)
     weighted_control_feature_squared_sum = np.zeros(feature_count, dtype=np.float64)
 
-    for start in range(0, len(reference), chunk_size):
-        stop = min(start + chunk_size, len(reference))
-        rows = reference.iloc[start:stop]
+    for rows in batches():
         features = transform.transform(rows)
-        treated_mask = treatment[start:stop] == 1
+        treatment = rows["treatment_binary"].to_numpy(dtype=np.int8)
+        treated_mask = treatment == 1
         outcome = rows["birthweight_g"].to_numpy(dtype=np.float64)
         logits = propensity_coefficients[0] + features @ propensity_coefficients[1:]
         propensity = expit(logits)
@@ -333,9 +561,12 @@ def _reference_aipw_estimates(
             treated_features = features[treated_mask]
             treated_residual = residual[treated_mask]
             treated_outcome = outcome[treated_mask]
-            count = len(treated_outcome)
-            treated_propensity[treated_cursor : treated_cursor + count] = propensity[treated_mask]
-            treated_cursor += count
+            observed_treated += len(treated_outcome)
+            treated_propensity_min = min(treated_propensity_min, float(propensity[treated_mask].min()))
+            treated_propensity_max = max(treated_propensity_max, float(propensity[treated_mask].max()))
+            treated_priorities, treated_propensity = _update_priority_sample(
+                treated_priorities, treated_propensity, propensity[treated_mask], rng
+            )
             treated_residual_sum += float(treated_residual.sum())
             treated_outcome_sum += float(treated_outcome.sum())
             aipw_score_squared_sum += float(np.dot(treated_residual, treated_residual))
@@ -354,10 +585,21 @@ def _reference_aipw_estimates(
                 1.0 - PROPENSITY_CLIP_EPSILON,
             )
             weights = clipped_propensity / (1.0 - clipped_propensity)
-            count = len(control_outcome)
-            control_propensity[control_cursor : control_cursor + count] = raw_propensity
-            control_weights[control_cursor : control_cursor + count] = weights
-            control_cursor += count
+            observed_controls += len(control_outcome)
+            control_propensity_min = min(control_propensity_min, float(raw_propensity.min()))
+            control_propensity_max = max(control_propensity_max, float(raw_propensity.max()))
+            control_weight_min = min(control_weight_min, float(weights.min()))
+            control_weight_max = max(control_weight_max, float(weights.max()))
+            clipped_count += int(np.count_nonzero(
+                (raw_propensity < PROPENSITY_CLIP_EPSILON)
+                | (raw_propensity > 1.0 - PROPENSITY_CLIP_EPSILON)
+            ))
+            control_priorities, control_propensity = _update_priority_sample(
+                control_priorities, control_propensity, raw_propensity, rng
+            )
+            weight_priorities, control_weights = _update_priority_sample(
+                weight_priorities, control_weights, weights, rng
+            )
 
             control_weight_sum += float(weights.sum())
             control_weight_squared_sum += float(np.dot(weights, weights))
@@ -370,7 +612,7 @@ def _reference_aipw_estimates(
             weighted_control_feature_sum += weights @ control_features
             weighted_control_feature_squared_sum += np.square(control_features).T @ weights
 
-    if treated_cursor != treated_count or control_cursor != control_count:
+    if observed_treated != treated_count or observed_controls != control_count:
         raise RuntimeError("Reference diagnostics did not align with treatment rows.")
     if not np.isfinite(control_weight_sum) or control_weight_sum <= 0:
         raise ValueError("Reference ATT propensity weights have an invalid total.")
@@ -418,6 +660,22 @@ def _reference_aipw_estimates(
         treated_mean, treated_variance, weighted_control_mean, weighted_control_variance
     )
 
+    treated_outside_control_range = 0
+    control_outside_treated_range = 0
+    for rows in batches():
+        features = transform.transform(rows)
+        logits = propensity_coefficients[0] + features @ propensity_coefficients[1:]
+        propensity = expit(logits)
+        treatment = rows["treatment_binary"].to_numpy(dtype=np.int8)
+        treated_outside_control_range += int(np.count_nonzero(
+            (propensity[treatment == 1] < control_propensity_min)
+            | (propensity[treatment == 1] > control_propensity_max)
+        ))
+        control_outside_treated_range += int(np.count_nonzero(
+            (propensity[treatment == 0] < treated_propensity_min)
+            | (propensity[treatment == 0] > treated_propensity_max)
+        ))
+
     diagnostics: dict[str, Any] = {
         "reference_aipw_att_g": float(aipw_att),
         "reference_aipw_se_g": aipw_se,
@@ -432,34 +690,29 @@ def _reference_aipw_estimates(
         "reference_aipw_weight_ess": float(
             control_weight_sum * control_weight_sum / control_weight_squared_sum
         ),
-        "reference_aipw_weight_clipped_n": int(
-            np.count_nonzero(
-                (control_propensity < PROPENSITY_CLIP_EPSILON)
-                | (control_propensity > 1.0 - PROPENSITY_CLIP_EPSILON)
-            )
-        ),
+        "reference_aipw_weight_clipped_n": clipped_count,
         "reference_aipw_weight_clipping_epsilon": PROPENSITY_CLIP_EPSILON,
-        "reference_aipw_treated_outside_control_propensity_range_n": int(
-            np.count_nonzero(
-                (treated_propensity < control_propensity.min())
-                | (treated_propensity > control_propensity.max())
-            )
-        ),
-        "reference_aipw_control_outside_treated_propensity_range_n": int(
-            np.count_nonzero(
-                (control_propensity < treated_propensity.min())
-                | (control_propensity > treated_propensity.max())
-            )
-        ),
+        "reference_aipw_treated_outside_control_propensity_range_n": treated_outside_control_range,
+        "reference_aipw_control_outside_treated_propensity_range_n": control_outside_treated_range,
     }
     diagnostics.update(_quantile_diagnostics("reference_aipw_weight", control_weights))
     diagnostics.update(_quantile_diagnostics("reference_aipw_treated_propensity", treated_propensity))
     diagnostics.update(_quantile_diagnostics("reference_aipw_control_propensity", control_propensity))
+    diagnostics["reference_aipw_weight_min"] = float(control_weight_min)
+    diagnostics["reference_aipw_weight_max"] = float(control_weight_max)
+    diagnostics["reference_aipw_treated_propensity_min"] = float(treated_propensity_min)
+    diagnostics["reference_aipw_treated_propensity_max"] = float(treated_propensity_max)
+    diagnostics["reference_aipw_control_propensity_min"] = float(control_propensity_min)
+    diagnostics["reference_aipw_control_propensity_max"] = float(control_propensity_max)
+    diagnostics["reference_aipw_weight_quantile_sample_n"] = len(control_weights)
+    diagnostics["reference_aipw_treated_propensity_quantile_sample_n"] = len(treated_propensity)
+    diagnostics["reference_aipw_control_propensity_quantile_sample_n"] = len(control_propensity)
+    diagnostics["reference_aipw_quantiles_approximate"] = True
     diagnostics["reference_aipw_propensity_overlap_lower"] = float(
-        max(treated_propensity.min(), control_propensity.min())
+        max(treated_propensity_min, control_propensity_min)
     )
     diagnostics["reference_aipw_propensity_overlap_upper"] = float(
-        min(treated_propensity.max(), control_propensity.max())
+        min(treated_propensity_max, control_propensity_max)
     )
     for feature, before, after in zip(transform.feature_names, smd_before, smd_after):
         diagnostics[f"reference_aipw_smd_before_{feature}"] = float(before)
@@ -715,36 +968,41 @@ def run_experiment(
             f"Output already exists: {existing_outputs[0]}. Choose another path or pass --overwrite."
         )
 
-    data = pd.read_csv(
-        input_path,
-        usecols=INPUT_COLUMNS,
-        dtype=INPUT_DTYPES,
-        low_memory=False,
-    )
-    treatment = data["treatment_binary"].to_numpy(dtype=np.int8)
-    if data["record_number"].duplicated().any():
-        raise ValueError(
-            "record_number values must be unique. For pooled years, create the "
-            "annual extracts with src/total_extraction.py so IDs include birth year."
-        )
-    if not np.isin(treatment, (0, 1)).all():
+    data = _load_streamed_pilot(input_path, pilot_rows, seed) if pilot_rows is not None else None
+    if data is not None and not np.isin(data["treatment_binary"].to_numpy(), (0, 1)).all():
         raise ValueError("treatment_binary must contain only 0 and 1.")
-    rng = np.random.default_rng(seed)
-    if pilot_rows is not None:
-        if pilot_rows > len(data):
-            raise ValueError(f"pilot_rows ({pilot_rows}) exceeds cohort size ({len(data)}).")
-        pilot_indices = np.sort(rng.choice(len(data), size=pilot_rows, replace=False))
-        data = data.iloc[pilot_indices].reset_index(drop=True)
-        treatment = data["treatment_binary"].to_numpy(dtype=np.int8)
     result_rows: list[dict[str, Any]] = []
     feature_map_rows: list[dict[str, str]] | None = None
 
     for split_number in range(1, repeats + 1):
-        reference_indices, test_indices = _stratified_split(
-            data, test_fraction, rng
-        )
-        reference = data.iloc[reference_indices]
-        test = data.iloc[test_indices]
+        if data is None:
+            split_seed = int(np.random.SeedSequence([seed, split_number]).generate_state(1)[0])
+            test, reference_source, reference_counts = _make_streamed_split(
+                input_path, test_fraction, split_seed
+            )
+            reference = None
+            print(
+                f"Split {split_number}: retained {len(test):,} test rows in memory; "
+                f"reference rows will be streamed in {CSV_CHUNK_SIZE:,}-row batches."
+            )
+        else:
+            split_rng = np.random.default_rng(np.random.SeedSequence([seed, split_number]))
+            reference_indices, test_indices = _stratified_split(
+                data, test_fraction, split_rng
+            )
+            reference = data.iloc[reference_indices]
+            test = data.iloc[test_indices]
+            reference_counts = {
+                "rows": len(reference),
+                "treated": int(reference["treatment_binary"].sum()),
+                "controls": int((reference["treatment_binary"] == 0).sum()),
+                "test_rows": len(test),
+            }
+
+            def reference_source(reference_frame: pd.DataFrame = reference) -> Iterable[pd.DataFrame]:
+                for start in range(0, len(reference_frame), REFERENCE_MODEL_CHUNK_SIZE):
+                    yield reference_frame.iloc[start : start + REFERENCE_MODEL_CHUNK_SIZE]
+
         # Matching-side preprocessing is learned only from the 1% test cohort.
         # Reference-side preprocessing is kept separate for the AIPW benchmark.
         matching_transform = fit_natality_transform(test)
@@ -752,19 +1010,34 @@ def run_experiment(
         if feature_map_rows is None:
             feature_map_rows = _feature_mapping(matching_transform)
         identity_matrix_weights = matching_transform.diagonal_field_weights()
-        reference_transform = fit_natality_transform(reference)
+        print(f"Split {split_number}: fitting reference preprocessing from streamed batches.")
+        reference_transform = fit_natality_transform(
+            reference_source,
+            cohort_size=reference_counts["rows"],
+        )
 
+        print(f"Split {split_number}: fitting reference propensity model; this scans the reference repeatedly.")
         reference_propensity_coefficients = _fit_propensity_model(
-            reference, reference_transform
+            reference_source,
+            reference_transform,
+            cohort_size=reference_counts["rows"],
+            treated_count=reference_counts["treated"],
         )
+        print(f"Split {split_number}: fitting reference control outcome model.")
         control_outcome_coefficients = _fit_reference_control_outcome(
-            reference, reference_transform
+            reference_source,
+            reference_transform,
+            control_count=reference_counts["controls"],
         )
+        print(f"Split {split_number}: calculating streamed AIPW reference diagnostics.")
         reference_estimates = _reference_aipw_estimates(
-            reference,
+            reference_source,
             reference_transform,
             reference_propensity_coefficients,
             control_outcome_coefficients,
+            cohort_size=reference_counts["rows"],
+            treated_count=reference_counts["treated"],
+            control_count=reference_counts["controls"],
         )
 
         identity = _match_one_method(
