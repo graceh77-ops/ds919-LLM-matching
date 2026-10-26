@@ -1,7 +1,7 @@
 {
   "year": 2024,
   "source": "CDC/NCHS 2024 Natality Public Use File; positions checked against the 2024 User Guide and existing extraction",
-  "default_input": "data/raw/2024/Nat2024us/Nat2024PublicUS.c20250512.r20250708.txt",
+  "default_input": "data/raw/2024/Nat2024PublicUS.c20250512.r20250708.txt",
   "default_output": "data/processed/2024/extracted_natality.csv",
   "expected_record_length": 1345,
   "encoding": "latin-1",

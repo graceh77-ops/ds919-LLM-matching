@@ -19,7 +19,8 @@ effect of maternal smoking during pregnancy on birth weight?
 
 - Start from annual extracted U.S. Natality records for 2016-2024, with one
   record per birth. Verify every annual layout and code harmonization before
-  pooling; only the 2024 layout is currently verified in this repository.
+  pooling; raw 2023 and 2024 files are present, but only the 2024 layout is
+  currently verified in this repository.
 - Exclude records with unknown or invalid treatment status (`CIG_REC` other
   than `Y` or `N`). Do not classify unknown status as unexposed.
 - Exclude records with unavailable or invalid birth weight. `DBWT = 9999` is

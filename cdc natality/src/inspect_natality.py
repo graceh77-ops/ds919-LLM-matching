@@ -1,7 +1,7 @@
 from pathlib import Path
 
 data_path = Path(
-    "data/raw/2024/Nat2024us/Nat2024PublicUS.c20250512.r20250708.txt"
+    "data/raw/2024/Nat2024PublicUS.c20250512.r20250708.txt"
 )
 
 if not data_path.exists():

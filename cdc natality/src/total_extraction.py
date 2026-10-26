@@ -1,8 +1,8 @@
 """Extract a CDC Natality fixed-width file using a verified year layout.
 
 Each layout JSON maps canonical project field names to that year's 1-based,
-inclusive positions in the source record. Only the 2024 layout is currently
-provided; add a reviewed layout after checking the corresponding CDC User Guide.
+inclusive positions in the source record. The 2024 layout is verified; add a
+reviewed layout for another year after checking its CDC User Guide.
 """
 
 from __future__ import annotations
@@ -118,7 +118,7 @@ def main() -> None:
         )
     source_path = args.input or PROJECT_ROOT / layout.get(
         "default_input",
-        f"data/raw/{args.year}/Nat{args.year}us/Nat{args.year}PublicUS.txt",
+        f"data/raw/{args.year}/Nat{args.year}PublicUS.txt",
     )
     output_path = args.output or PROJECT_ROOT / layout.get(
         "default_output", f"data/processed/{args.year}/extracted_natality.csv"

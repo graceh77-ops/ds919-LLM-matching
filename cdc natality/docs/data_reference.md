@@ -6,7 +6,7 @@
 - Source: [User Guide to the 2024 Natality Public Use File](https://ftp.cdc.gov/pub/Health_Statistics/NCHS/Dataset_Documentation/DVS/natality/UserGuide2024.pdf).
 - Download date: 2026-10-20.
 - Raw fixed-width file: `Nat2024PublicUS.c20250512.r20250708.txt`, stored under
-  `data/raw/2024/Nat2024us/` and excluded from Git.
+  `data/raw/2024/` and excluded from Git.
 - The raw file contains 3,638,436 records. Every inspected record was 1,345
   characters; the User Guide lists 1,330 characters. The file was not edited.
 - Initial raw-file inspection is documented in `src/inspect_natality.py`.

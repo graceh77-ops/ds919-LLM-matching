@@ -3,10 +3,12 @@
 ## Purpose and status
 
 The scripts use a shared annual extraction schema so verified CDC Natality
-layouts can feed the same cohort-preparation and matching programs. The current
-repository contains a layout verified for **2024 only**. Layouts for 2023,
-2022, 2010, and any other year must be checked against that year's CDC User
-Guide before extraction. Year-agnostic means the analysis code can consume the
+layouts can feed the same cohort-preparation and matching programs. Raw public-
+use files for **2023 and 2024** are present under `data/raw/<year>/`; the
+layout in this repository is verified for **2024 only**. The 2023 file is not
+ready for extraction until its layout is checked against the 2023 CDC User
+Guide. Layouts for 2022, 2010, and any other year also need year-specific
+review. Year-agnostic means the analysis code can consume the
 shared schema; it does not mean annual source files have the same field
 positions, code definitions, or reporting flags.
 
@@ -67,7 +69,10 @@ the terminal is at the repository root, first run `Set-Location "cdc natality"`.
      --output data/processed/2016/extracted_natality.csv
    ```
 
-   The 2024 defaults still point to the existing 2024 file and output path.
+   The 2024 defaults point to the existing file directly under
+   `data/raw/2024/`. The 2023 file is also directly under `data/raw/2023/`,
+   but do not extract it until `config/natality_layouts/2023.json` has been
+   verified against its User Guide.
 
 2. Combine the nine annual extractions. The combiner checks identical column
    schemas and distinct year labels:
@@ -113,9 +118,10 @@ stratum into the 99% reference and 1% test portions. Also report pooled
 results and consider year-specific ATT summaries as a secondary description.
 
 The code schema now supports years 2016-2024, but annual extraction layouts
-and code harmonization still need year-by-year review. The repository
-currently verifies only the 2024 layout, so pooled estimates must wait until
-all annual inputs are extracted and checked. Historical ten-field/23-column
+and code harmonization still need year-by-year review. Raw files for 2023 and
+2024 are present; only the 2024 layout is currently verified, so pooled
+estimates must wait until the 2023 layout and all other annual inputs are
+extracted and checked. Historical ten-field/23-column
 results remain archived and are not directly comparable to the new
 eleven-field/31-column design. Raw and processed datasets are local inputs and
 must not be committed to Git.

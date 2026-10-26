@@ -7,10 +7,10 @@ pregnancy and infant birth weight.
 ## Scope and status
 
 The active design targets 2016-2024 singleton births and includes `birth_year`
-as an eleventh categorical, LLM-weighted field. The extraction code supports a
-shared annual schema, but only the 2024 fixed-width layout has been verified.
-Each additional year needs a reviewed layout and documented code
-harmonization before extraction. Existing experiment outputs use the earlier
+as an eleventh categorical, LLM-weighted field. Raw public-use files for 2023
+and 2024 are present under their year folders. Only the 2024 fixed-width
+layout has been verified; the 2023 file needs a reviewed layout and documented
+code harmonization before extraction. Existing experiment outputs use the earlier
 2024-only, ten-field design and are historical. The current AIPW and matching
 models are Natality-specific and do not automatically generalize to a
 different dataset.

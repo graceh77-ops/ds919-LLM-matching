@@ -2,7 +2,7 @@ import csv
 from pathlib import Path
 
 source_path = Path(
-    "data/raw/2024/Nat2024us/Nat2024PublicUS.c20250512.r20250708.txt"
+    "data/raw/2024/Nat2024PublicUS.c20250512.r20250708.txt"
 )
 output_path = Path(
     "data/processed/2024/sample_extract_1000.csv"
