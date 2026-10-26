@@ -2,9 +2,9 @@
 
 ## Purpose
 
-This procedure is reusable, but the linked prompt and its ten covariates are
-specific to the CDC Natality application. A different dataset needs a new
-outcome-blind prompt and matching weight schema.
+This procedure is reusable, but the linked prompt and its eleven fields are
+specific to the pooled CDC Natality application. A different dataset needs a
+new outcome-blind prompt and matching weight schema.
 
 Generate one reproducible set of manual-chat covariate-priority weights without
 exposing the LLM to empirical outcome or matching results. This document
@@ -20,14 +20,14 @@ specifies the elicitation procedure; the prompt itself is kept separately in
    response, and any retries. If a format correction is necessary, repeat only
    the original prompt and a neutral request to return valid JSON in the
    specified format; record the retry.
-4. Validate that the response is a JSON object with exactly the ten required
+4. Validate that the response is a JSON object with exactly the eleven required
    field names, integer values from 0 through 10, and at least one positive
    value. Do not alter individual scores manually.
 5. From the repository root, run `Set-Location "cdc natality"`. Save the
    validated scores in
-   `results/matching results/manual_chat_weights_outcome.json`. Save the
+   `results/matching results/manual_chat_weights_2016_2024.json`. Save the
    elicitation record in
-   `results/matching results/manual_chat_weight_record_outcome.md`.
+   `results/matching results/manual_chat_weight_record_2016_2024.md`.
 6. Freeze the new weights before running any matching evaluation. Do not revise
    them using pilot or test ATT, reference error, SMD, or comparator results.
 
@@ -38,9 +38,11 @@ isolated session. Do not use matching results to resolve ambiguity.
 ## Analysis separation
 
 The new weights change only the LLM-assigned field priorities. Keep the
-generalized Mahalanobis formula, cohort definition, covariate encoding,
+generalized Mahalanobis formula, cohort definition, 11-field encoding,
 test-sample-fitted matching preprocessing and covariance, eigenvalue floor,
 split procedure, matching ratio, replacement rule, caliper setting, and
 evaluation metrics fixed as documented in the analysis and LLM matching
-protocols. 
+protocols. Existing ten-field elicitation files are historical and are not
+valid for the pooled 2016-2024 schema. Elicit a new vector once and use that
+fixed vector across all splits in the run.
 Evaluate the new weights only after the scores and their provenance are saved.

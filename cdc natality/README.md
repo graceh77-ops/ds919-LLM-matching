@@ -6,11 +6,14 @@ pregnancy and infant birth weight.
 
 ## Scope and status
 
-The active analysis uses the 2024 singleton-birth cohort. The extraction code
-supports a shared annual schema, but only the 2024 fixed-width layout has been
-verified. A future year must have its own reviewed layout and documented code
-harmonization before extraction. The current AIPW and matching models are
-Natality-specific and do not automatically generalize to a different dataset.
+The active design targets 2016-2024 singleton births and includes `birth_year`
+as an eleventh categorical, LLM-weighted field. The extraction code supports a
+shared annual schema, but only the 2024 fixed-width layout has been verified.
+Each additional year needs a reviewed layout and documented code
+harmonization before extraction. Existing experiment outputs use the earlier
+2024-only, ten-field design and are historical. The current AIPW and matching
+models are Natality-specific and do not automatically generalize to a
+different dataset.
 
 ## Contents
 
@@ -40,8 +43,12 @@ python src/prepare_analysis_data.py
 ```
 
 For an experiment, pass the prepared singleton cohort using `--input` and set
-the required split count and seed. See the experiment configuration and
-multi-year pipeline documentation before running pooled-year comparisons.
+the required split count and seed. A matching run also requires an
+eleven-field weight file via `--weights-json`; use `--no-llm-weights` to run
+conventional comparators before a new outcome-blind weight vector is ready.
+Prior ten-field weight files cannot be used with the pooled-year schema. See
+the experiment configuration and multi-year pipeline documentation before
+running pooled-year comparisons.
 
 Python dependencies are listed in the repository-root `requirements.txt`.
 Install them from the repository root with:

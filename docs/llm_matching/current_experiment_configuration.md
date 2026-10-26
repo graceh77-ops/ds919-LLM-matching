@@ -2,30 +2,31 @@
 
 ## Status and scope
 
-This document records the current implementation and configuration. AIPW and
-the test-only matching workflow have been checked in development pilots and
-exploratory full-cohort runs recorded below.
-The scope is the 2024 CDC Natality singleton cohort described in the
+This document records the current implementation and configuration. Existing
+results below are historical 2024-only runs using the former ten-field schema.
+The active code schema now targets 2016-2024, but pooled analysis is pending
+annual layout verification, code harmonization, and new eleven-field LLM
+weight elicitation. The scope is the CDC Natality singleton cohort described in the
 [maternal smoking analysis protocol](../../cdc%20natality/docs/protocal_maternal_smoking_dataset.md).
 
 ## Frozen shared configuration
 
 | Component | Current configuration |
 |---|---|
-| Eligible cohort | 2024 singleton births (`DPLURAL = 1`) with known smoking treatment, valid birth weight, and flag-aware complete cases on the ten prespecified covariates |
+| Eligible cohort | 2016-2024 singleton births (`DPLURAL = 1`) with known smoking treatment, valid birth weight, flag-aware complete cases on the ten Natality covariates, and a valid birth year; only the 2024 layout is currently verified |
 | Treatment | `CIG_REC = Y` versus `CIG_REC = N` |
 | Outcome | Birth weight, grams (`DBWT`) |
 | Estimand | ATT for treated births in each eligible cohort partition |
-| Covariates | `MAGER`, `MRACEHISP`, `MEDUC`, `CIG0_R`, `PRIORLIVE`, `PRIORDEAD`, `BMI_R`, `RF_PDIAB`, `RF_PHYPE`, `SEX` |
-| Encoding | Matching methods fit numeric means/scales and categorical-contrast means on the 1% test sample; four categorical fields use fixed recognized levels and full-rank orthonormal Helmert contrasts; three binary fields use one contrast each; 23 columns total. |
+| Covariates | `MAGER`, `MRACEHISP`, `MEDUC`, `CIG0_R`, `PRIORLIVE`, `PRIORDEAD`, `BMI_R`, `RF_PDIAB`, `RF_PHYPE`, `SEX`, `birth_year` |
+| Encoding | Matching methods fit numeric means/scales and categorical-contrast means on the 1% test sample; five categorical fields use fixed levels and full-rank orthonormal Helmert contrasts; three binary fields use one contrast each; 31 columns total. |
 | Matching covariance | Full sample covariance (`ddof = 1`) estimated from encoded 1% test records once per split and reused by generalized Mahalanobis matching methods in that split |
 | Eigenvalue floor | `1e-8` times the largest covariance eigenvalue; floor every lower eigenvalue at that threshold before inverse-square-root construction |
 | Generalized Mahalanobis | `d_V(x_i,x_j) = sqrt((x_i-x_j)' S^(-1/2) V S^(-1/2)(x_i-x_j))`; identity method uses `V = I` |
-| Field-weight mapping | Rescale ten nonnegative field scores to mean 1, then repeat each field score on all columns from that field; column-normalized allocation is a separately labeled sensitivity method |
-| Default LLM weights | Outcome-blind DeepSeek API weights from `cdc natality/results/matching results/deepseek_api/20261022T081027Z/weights.json`; pass `--weights-json` to select another set, such as manual-chat weights |
-| PCA comparator | Z-standardize all 23 encoded columns using pooled 1% test covariates (`ddof = 0`); fit PCA there; retain the minimum component count reaching 90% cumulative explained variance; use ordinary Mahalanobis distance from retained score covariance, with the `1e-8` relative eigenvalue floor and no additional explained-variance weighting |
+| Field-weight mapping | Rescale eleven nonnegative field scores to mean 1, then repeat each field score on all columns from that field; column-normalized allocation is a separately labeled sensitivity method |
+| LLM weights | Prior ten-field weights are historical and cannot be loaded for the new schema. Elicit a new outcome-blind eleven-field vector and pass it explicitly with `--weights-json`; the same vector applies across all splits. |
+| PCA comparator | Z-standardize all 31 encoded columns using pooled 1% test covariates (`ddof = 0`); fit PCA there; retain the minimum component count reaching 90% cumulative explained variance; use ordinary Mahalanobis distance from retained score covariance, with the `1e-8` relative eigenvalue floor and no additional explained-variance weighting |
 | Match rule | 1:1 nearest neighbor, with replacement, no caliper; ties within the coded tolerance resolve to the smallest source `record_number` |
-| Split | Treatment-stratified random 99% reference / 1% test, without replacement within each treatment stratum; use the same split for methods in a repetition |
+| Split | Treatment-by-year-stratified random 99% reference / 1% test, without replacement within each stratum; use the same split for methods in a repetition |
 | Primary reference estimator | AIPW-ATT in the 99% reference cohort: unpenalized logistic propensity model and control-only OLS outcome model, each using the shared encoded covariates; propensity clipping at `1e-6` and `1 - 1e-6` for finite odds weights |
 | Reference sensitivities | IPW-ATT (normalized odds-weighted control mean) and outcome-regression ATT; report separately without averaging |
 | Matching comparators | Identity-matrix generalized Mahalanobis, PSM, PCA Mahalanobis, and LLM-weighted matching use only 1% test-sample covariates and treatment to fit matching preprocessing, distances, and propensity scores; matching is within the 1% test cohort |
@@ -38,21 +39,22 @@ resampling, not independent validation or external replication.
 ## Method status
 
 - **AIPW-ATT:** primary pseudo-reference estimator. Its propensity and control
-  outcome models use a reference-fitted 23-column representation. AIPW diagnostics include propensity overlap, weighted SMD,
+  outcome models use a reference-fitted 31-column representation. AIPW diagnostics include propensity overlap, weighted SMD,
   odds-weight distribution and maximum, clipping count, effective sample size,
   and a robust influence-function standard error with a 95% Wald interval.
 - **IPW-ATT and outcome-regression ATT:** separate reference sensitivity
   estimates; do not average them with AIPW.
-- **LLM field weighting:** The recorded outcome-blind DeepSeek API weights are
-  the default for future runs. Manual-chat weights remain a separate
-  alternative for comparison; neither set is treated as ground truth.
+- **LLM field weighting:** Existing manual-chat and DeepSeek weights are
+  historical ten-field vectors. A new outcome-blind eleven-field vector must
+  be elicited for this schema and supplied explicitly; no weight file is
+  silently selected as the default.
 - **Identity generalized Mahalanobis:** matching comparator evaluated within
   the 1% test cohort, on the same footing as PSM and LLM-weighted matching.
-- **PSM:** The unpenalized logistic model uses the 23 encoded covariates and is
+- **PSM:** The unpenalized logistic model uses the 31 encoded covariates and is
   fitted on 1% test-sample treatment and covariates. Its logit scores are used
   to match treated and controls within that same test sample under the shared
   1:1 replacement/no-caliper rule.
-- **PCA Mahalanobis:** uses test-only standardized 23-column features, the 90%
+- **PCA Mahalanobis:** uses test-only standardized 31-column features, the 90%
   cumulative explained-variance retention rule, and ordinary Mahalanobis
   distance on retained PC scores. It is included as a comparator.
 - **Genetic matching:** not included in the current comparison; its detailed
@@ -60,7 +62,10 @@ resampling, not independent validation or external replication.
 
 ## Historical run settings and outputs
 
-The historical pre-refactor matching runs used reference-fitted matching
+All existing results listed below used the former ten-field/23-column design,
+predate birth-year adjustment, and must be treated as historical analyses.
+They should not be compared directly with results under the new schema. The
+historical pre-refactor matching runs used reference-fitted matching
 preprocessing and reference-fitted PSM; they predate the test-only matching
 data boundary above and should be treated as historical, not results under
 the current configuration. Under the revised design, the full cohort has been

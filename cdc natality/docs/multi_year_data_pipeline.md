@@ -20,7 +20,8 @@ Each annual extraction contains:
   identification and match tie-breaking;
 - `source_record_number`: the original row number within that year's file;
 - the canonical project field names used by cohort preparation, including
-  treatment, outcome, plurality, the ten covariates, and reporting flags.
+  treatment, outcome, plurality, the ten clinical/demographic covariates,
+  `birth_year`, and reporting flags.
 
 Initial extraction keeps field values as strings. A layout may optionally
 define `value_maps` for code changes verified in the relevant User Guide. Keep
@@ -86,21 +87,23 @@ the terminal is at the repository root, first run `Set-Location "cdc natality"`.
 4. Run the existing experiment against the prepared singleton file by passing
    its path to `src/run_matching_experiment.py --input ...`. The matching and
    AIPW implementations require the same canonical covariate and derived
-   treatment/outcome fields as the 2024 cohort.
+   treatment/outcome fields and `birth_year` field as the 2024 cohort.
 
-## Methodological decision before pooled-year results
+## Pooled-year model decision
 
-`birth_year` is retained in annual and pooled files for audit and reporting,
-but the current matching and reference models use the existing ten
-prespecified covariates and do **not** adjust for birth year. A pooled analysis
-may therefore mix year-specific treatment and birth-weight patterns. Before
-using pooled results as substantive comparisons, decide and document whether
-year should enter AIPW and matching, whether splits should be stratified by
-year as well as treatment, and whether effects should also be reported by
-year. Adding year to model covariates changes the frozen ten-field/23-column
-specification and requires updated encoding, model, PCA, and LLM-weight
-protocol decisions.
+The pooled 2016-2024 design now includes `birth_year` as an eleventh
+LLM-weighted field and as a covariate in AIPW and every matching comparator.
+Encode the nine years categorically with eight fixed Helmert contrasts. The
+LLM returns one field score for `birth_year`; the primary mapping repeats that
+score over the eight encoded columns, with the existing column-normalized
+field allocation as a sensitivity method. Split each treatment-by-year
+stratum into the 99% reference and 1% test portions. Also report pooled
+results and consider year-specific ATT summaries as a secondary description.
 
-Until those decisions and annual code harmonization are reviewed, the
-2024-only experiment remains the current analysis. Raw and processed datasets
-are local inputs and must not be committed to Git.
+The code schema now supports years 2016-2024, but annual extraction layouts
+and code harmonization still need year-by-year review. The repository
+currently verifies only the 2024 layout, so pooled estimates must wait until
+all annual inputs are extracted and checked. Historical ten-field/23-column
+results remain archived and are not directly comparable to the new
+eleven-field/31-column design. Raw and processed datasets are local inputs and
+must not be committed to Git.

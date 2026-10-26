@@ -4,7 +4,7 @@ Copy only the text between the delimiters into a new, isolated LLM session.
 
 ---
 
-Assign a relative matching-priority score to each of the ten covariates listed below for this study. Base each score only on the definitions provided here.
+Assign a relative matching-priority score to each of the eleven fields listed below for this study. Base each score only on the definitions provided here.
 
 **Treatment:** Maternal smoking during pregnancy, defined as `CIG_REC = Y`; the comparison group is `CIG_REC = N`.
 
@@ -22,10 +22,13 @@ Assign a relative matching-priority score to each of the ten covariates listed b
 - `RF_PDIAB`: Whether the mother had pre-pregnancy diabetes.
 - `RF_PHYPE`: Whether the mother had pre-pregnancy hypertension.
 - `SEX`: Infant sex.
+- `birth_year`: Calendar year of the birth, from 2016 through 2024. Year may capture secular changes in smoking patterns, population composition, clinical care, and data collection. It is a study-period adjustment variable, not a characteristic caused by an individual mother's smoking.
 
-Return one **integer score from 0 to 10** for each covariate. A score of 0 means lowest relative priority for matching; 10 means highest relative priority. Scores are relative and do not need to sum to 1.
+Return one **integer score from 0 to 10** for each field. A score of 0 means lowest relative priority for matching; 10 means highest relative priority. Scores are relative and do not need to sum to 1.
 
-Return a JSON object with exactly these ten keys and numeric values. Do not include prose, comments, or additional keys.
+The `birth_year` field will be represented in the analysis by eight categorical contrasts for the nine calendar years. Give one field-level score for `birth_year`; the matching implementation will apply that score to each encoded year contrast in the primary field-to-column mapping.
+
+Return a JSON object with exactly these eleven keys and numeric values. Do not include prose, comments, or additional keys.
 
 ```json
 {
@@ -38,7 +41,8 @@ Return a JSON object with exactly these ten keys and numeric values. Do not incl
   "BMI_R": 0,
   "RF_PDIAB": 0,
   "RF_PHYPE": 0,
-  "SEX": 0
+  "SEX": 0,
+  "birth_year": 0
 }
 ```
 

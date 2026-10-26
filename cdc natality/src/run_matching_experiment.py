@@ -31,9 +31,7 @@ from matching_distance import (
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INPUT = PROJECT_ROOT / "data" / "processed" / "2024" / "analysis_cohort_singletons.csv"
 DEFAULT_RESULTS_ROOT = PROJECT_ROOT / "results" / "matching results"
-DEFAULT_WEIGHTS_JSON = (
-    DEFAULT_RESULTS_ROOT / "deepseek_api" / "20261022T081027Z" / "weights.json"
-)
+DEFAULT_WEIGHTS_JSON = None
 DEFAULT_TEST_FRACTION = 0.01
 PCA_CUMULATIVE_VARIANCE_THRESHOLD = 0.90
 REFERENCE_MODEL_CHUNK_SIZE = 100_000
@@ -61,27 +59,34 @@ INPUT_DTYPES = {
     "RF_PDIAB": "category",
     "RF_PHYPE": "category",
     "SEX": "category",
+    "birth_year": "int16",
 }
 
 
 def _stratified_split(
-    treatment: np.ndarray,
+    data: pd.DataFrame,
     test_fraction: float,
     rng: np.random.Generator,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Split each treatment group, rounding the test count to nearest integer."""
+    """Split each treatment-by-year stratum, rounding its test count."""
     test_parts: list[np.ndarray] = []
     reference_parts: list[np.ndarray] = []
-    for treatment_value in (0, 1):
-        group = np.flatnonzero(treatment == treatment_value)
+    for (treatment_value, birth_year), stratum in data.groupby(
+        ["treatment_binary", "birth_year"], sort=True, observed=True
+    ):
+        group = stratum.index.to_numpy(dtype=np.int64)
         if len(group) < 2:
             raise ValueError(
-                f"Treatment group {treatment_value} has fewer than two records."
+                "Treatment-by-year stratum "
+                f"({treatment_value}, {birth_year}) has fewer than two records."
             )
         shuffled = rng.permutation(group)
         test_count = max(1, int(np.floor(len(group) * test_fraction + 0.5)))
         if test_count >= len(group):
-            raise ValueError("The test fraction leaves no reference records in a stratum.")
+            raise ValueError(
+                "The test fraction leaves no reference records in treatment-by-year "
+                f"stratum ({treatment_value}, {birth_year})."
+            )
         test_parts.append(shuffled[:test_count])
         reference_parts.append(shuffled[test_count:])
 
@@ -251,11 +256,11 @@ def _fit_reference_control_outcome(
         triangular = np.linalg.qr(stack, mode="r")
 
     coefficient_count = len(transform.feature_names) + 1
-    coefficients, _, rank, _ = np.linalg.lstsq(
+    coefficients, _, _, _ = np.linalg.lstsq(
         triangular[:, :coefficient_count], triangular[:, coefficient_count], rcond=None
     )
-    if rank < coefficient_count:
-        raise ValueError("The reference control outcome-model design is rank deficient.")
+    # A single-year cohort has constant birth-year contrasts after centering.
+    # Least squares returns a minimum-norm solution for these redundant columns.
     return np.asarray(coefficients, dtype=np.float64)
 
 
@@ -596,8 +601,8 @@ def _pca_mahalanobis_coordinates(
     """Fit test-only PCA and return ordinary Mahalanobis coordinates in PC space."""
     if test_features.ndim != 2 or len(test_features) < 2:
         raise ValueError("PCA requires at least two test records and a 2D feature matrix.")
-    if test_features.shape[1] != 23:
-        raise ValueError(f"PCA expects the 23 encoded covariates, got {test_features.shape[1]}.")
+    if test_features.shape[1] != 31:
+        raise ValueError(f"PCA expects the 31 encoded covariates, got {test_features.shape[1]}.")
     if treatment.shape != (len(test_features),):
         raise ValueError("PCA treatment labels do not align with test features.")
 
@@ -668,6 +673,11 @@ def _load_weights(path: Path) -> dict[str, float]:
         weights = json.load(source)
     if not isinstance(weights, dict):
         raise ValueError("The weight JSON must be an object of field names to weights.")
+    if set(weights) != set(FIELD_ORDER):
+        raise ValueError(
+            "Weight keys must exactly match the current eleven-field schema; "
+            "prior ten-field weight files need a new outcome-blind elicitation."
+        )
     return {str(field): float(weight) for field, weight in weights.items()}
 
 
@@ -725,7 +735,7 @@ def run_experiment(
 
     for split_number in range(1, repeats + 1):
         reference_indices, test_indices = _stratified_split(
-            treatment, test_fraction, rng
+            data, test_fraction, rng
         )
         reference = data.iloc[reference_indices]
         test = data.iloc[test_indices]
@@ -939,7 +949,7 @@ def parse_args() -> argparse.Namespace:
         "--test-fraction",
         type=float,
         default=DEFAULT_TEST_FRACTION,
-        help="Test fraction within each treatment stratum (default: 0.01).",
+        help="Test fraction within each treatment-by-year stratum (default: 0.01).",
     )
     parser.add_argument(
         "--pilot-rows",
@@ -952,8 +962,8 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=DEFAULT_WEIGHTS_JSON,
         help=(
-            "JSON object with one nonnegative value for each field "
-            f"(default: {DEFAULT_WEIGHTS_JSON}). Use this to select manual-chat weights."
+            "JSON object with one nonnegative value for each of the eleven fields. "
+            "Prior ten-field weight files do not match the current schema."
         ),
     )
     weight_group.add_argument(
@@ -971,6 +981,11 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    if not args.no_llm_weights and args.weights_json is None:
+        raise SystemExit(
+            "Provide --weights-json with an outcome-blind eleven-field weight file, "
+            "or pass --no-llm-weights to run only conventional comparators."
+        )
     if args.output is None and args.summary_output is None:
         run_label = f"{args.repeats}-split {date.today():%Y%m%d}"
         output_dir = DEFAULT_RESULTS_ROOT / run_label
@@ -987,11 +1002,9 @@ def main() -> None:
         summary_path = args.summary_output
         output_path = summary_path.with_name("complete_information.csv")
 
-    weights = (
-        None
-        if args.no_llm_weights
-        else _load_weights(args.weights_json)
-    )
+    weights = None
+    if not args.no_llm_weights and args.weights_json is not None:
+        weights = _load_weights(args.weights_json)
     run_experiment(
         input_path=args.input,
         output_path=output_path,

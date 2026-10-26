@@ -18,14 +18,15 @@ Does LLM-generated covariate weighting improve matching performance compared wit
 
 ## Repeated 99% / 1% reference comparison
 
-For each of `R` repeated, treatment-stratified random splits:
+For each of `R` repeated, treatment-by-year-stratified random splits:
 
 1. Assign 99% of eligible singleton births to a reference sample and 1% to a
-   test sample, preserving treatment strata in the split. Use NumPy's seeded
-   `default_rng` generator (PCG64); within each treatment group, round the 1%
-   test count to the nearest integer (half-up) and sample without replacement.
+   test sample, preserving each treatment-by-year stratum in the split. Use
+   NumPy's seeded `default_rng` generator (PCG64); within each stratum, round
+   the 1% test count to the nearest integer (half-up) and sample without
+   replacement.
 2. Fit the reference-cohort propensity and control outcome models using a
-   reference-fitted representation of the shared 23 encoded covariates.
+   reference-fitted representation of the shared 31 encoded covariates.
    Calculate AIPW-ATT as the primary reference estimate and calculate IPW-ATT
    and outcome-regression ATT as separate reference sensitivities.
 3. Fit matching-side preprocessing and any treatment model using only the 1%
@@ -77,21 +78,21 @@ confounding. This remains a **pseudo-reference comparison**, not evaluation
 against the true causal effect.
 
 These repeated splits are **within-cohort resampling**: every split is drawn
-from the same eligible 2024 cohort, and records may appear in the test sample
+from the same eligible pooled 2016-2024 cohort, and records may appear in the test sample
 in one split and the reference sample in another. They are not independent
 validation cohorts or independent replications. Summaries across splits
 describe sensitivity to the random partition of this cohort; they do not
 provide external validation or make the source births independent across
 repetitions.
 
-The 2024 cohort has about 80,000 treated singleton births before matching, so
-a 1% test sample contains about 800 treated births before matching and may
-contain fewer after matching. Test-sample estimates may consequently be noisy.
-The later plan is to consider adding 2023, 2022, and earlier Natality years to
-increase sample size and improve the stability of the reference comparison.
-The present work remains 2024 only. Before pooling years, harmonize variables
-and eligibility rules and document how calendar year affects the target
-population and analysis.
+The existing 2024-only cohort has about 80,000 treated singleton births before
+matching, so its 1% test sample contains about 800 treated births before
+matching. The pooled 2016-2024 design adds calendar year as an eleventh,
+categorical, LLM-weighted adjustment field. Year is represented by eight
+fixed Helmert contrasts; a single field-level LLM score maps to those columns
+using the documented repeated-weight rule. Annual layouts and codes still
+need harmonization, and only 2024 is currently verified. Do not run pooled
+comparisons until the year-specific inputs and coding have passed review.
 
 The historical runs used one split and seed `20261022`. A final repetition
 count and seed procedure have not been selected. Record and freeze them before
@@ -112,8 +113,9 @@ Apply the same covariate-weighting task and Natality design in three stages:
    implementation in [`cdc natality/src/get_deepseek_weights.py`](../../cdc%20natality/src/get_deepseek_weights.py).
    Preserve its exact prompt, settings, returned weights, and API response in
    the timestamped run record; the currently selected outcome-blind DeepSeek
-   weights are the default input for matching runs. The manual-chat weights
-   remain available by passing their JSON path with `--weights-json`.
+   weights from the prior ten-field design are historical. Elicit a new
+   eleven-field vector for the pooled 2016-2024 design and pass its JSON path
+   with `--weights-json`; use that one fixed vector across splits.
 3. **Advanced API:** then use the more advanced API/model(to be identified).
 
 For every stage, give the LLM only the pre-specified covariate names,
@@ -125,8 +127,9 @@ Request structured output that can be checked and applied reproducibly. Record
 the interface or model and version, exact prompt, settings, date, returned
 weights, any retries, and any manual changes. Use the resulting weights
 consistently across repeated splits for that stage; do not tune weights against
-test outcomes. Selecting DeepSeek as the current default is an operational
-project choice; it does not establish that DeepSeek weights perform better.
+test outcomes. DeepSeek remains the planned first API provider, but the prior
+ten-field weight file is not a default for this new schema. Provider choice
+does not establish that DeepSeek weights perform better.
 
 ## Methods to compare
 
@@ -144,7 +147,7 @@ specified outside the LLM.
 - **Identity-matrix unweighted matching:** generalized Mahalanobis distance
   with identity weight matrix (`V = I`) after the study-specific covariate
   coding and scaling. Estimate its ATT in the test cohort.
-- **PCA Mahalanobis matching:** use the existing 23 encoded columns and fixed
+- **PCA Mahalanobis matching:** use the fixed 31 encoded columns and fixed
   category schema. For each split, standardize these columns using means and
   population standard deviations from the pooled 1% test cohort, then fit PCA
   on that cohort only. Retain the smallest number of components reaching 90%
@@ -157,7 +160,7 @@ specified outside the LLM.
 ### Additional comparators
 
 - **Propensity-score matching:** fit an unpenalized logistic regression for
-  treatment using the 23 encoded covariates, preprocessing, treatment, and
+  treatment using the 31 encoded covariates, preprocessing, treatment, and
   records in the 1% test sample in each split. Match those same test records on
   their fitted logit propensity scores using 1:1 nearest-neighbor matching
   with replacement and no caliper. Resolve ties by the smallest source record

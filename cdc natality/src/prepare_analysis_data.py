@@ -17,6 +17,7 @@ MISSING_OUTCOME_CODE = 9999
 # that the source item was reported. Imputation flags for age, race, and sex do
 # not disqualify otherwise usable values.
 PRIMARY_COVARIATE_VALIDATORS = {
+    "birth_year": lambda value: value.isdigit() and 2016 <= int(value) <= 2024,
     "MAGER": lambda value: value.isdigit() and 12 <= int(value) <= 50,
     "MRACEHISP": lambda value: value in {"1", "2", "3", "4", "5", "6", "7"},
     "MEDUC": lambda value: value in {"1", "2", "3", "4", "5", "6", "7", "8"},
@@ -253,7 +254,8 @@ def main():
 - Valid birth weight maximum: {max_birthweight}
 
 The analysis cohort files apply the flag-aware complete-case rule for all
-primary covariates. Values must use recognized, non-unknown codes; reporting
+primary covariates, including birth year in the supported 2016-2024 range.
+Values must use recognized, non-unknown codes; reporting
 flags `F_MHISP`, `F_MEDUC`, `F_CIGS_0`, `F_M_HT`, `F_PWGT`, `F_RF_PDIAB`, and
 `F_RF_PHYPER` must equal `1`. CDC-imputed age, race, and sex values remain
 eligible; their imputation flags are retained for audit. Gestational age is not

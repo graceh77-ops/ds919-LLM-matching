@@ -36,6 +36,7 @@ EXPECTED_KEYS = {
     "RF_PDIAB",
     "RF_PHYPE",
     "SEX",
+    "birth_year",
 }
 
 
@@ -57,7 +58,7 @@ def validate_weights(content: str) -> dict[str, int]:
     except json.JSONDecodeError as exc:
         raise ValueError(f"Assistant response is not valid JSON: {exc}") from exc
     if not isinstance(parsed, dict) or set(parsed) != EXPECTED_KEYS:
-        raise ValueError("Response must be an object with exactly the ten prespecified keys")
+        raise ValueError("Response must be an object with exactly the eleven prespecified keys")
     if any(type(value) is not int or not 0 <= value <= 10 for value in parsed.values()):
         raise ValueError("Every score must be an integer from 0 through 10")
     if not any(parsed.values()):
@@ -163,7 +164,7 @@ def main() -> int:
         f"- Prompt SHA-256: `{prompt_hash}`\n"
         f"- Finish reason: `{choices[0].get('finish_reason', 'not reported')}`\n"
         f"- Token usage: `{json.dumps(response.get('usage', 'not reported'))}`\n"
-        "- Validation: passed; exactly ten required integer scores from 0 to 10.\n"
+        "- Validation: passed; exactly eleven required integer scores from 0 to 10.\n"
         "- Retries or manual edits: none; this script sends one request and does not edit scores.\n\n"
         "## Exact prompt sent\n\n"
         f"```text\n{prompt}\n```\n\n"

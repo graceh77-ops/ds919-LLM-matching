@@ -1,4 +1,4 @@
-# Covariate Review: 2024 Natality
+# Covariate Review: Natality Pooled-Year Design
 
 This document holds the candidate list, field inventory, and causal
 screening for the study of maternal smoking during pregnancy and birth weight.
@@ -65,6 +65,7 @@ The primary set below reflects the current study decision.
 | Primary set | `BMI_R` | CDC's BMI measure represents pre-pregnancy BMI; use the recoded form available in this extract. Do not include `PWgt_R` alongside it in the primary set. |
 | Primary set | `RF_PDIAB`, `RF_PHYPE` | Pre-pregnancy diabetes and hypertension are baseline health characteristics; use reporting flags for data-quality review, not as matching variables. |
 | Primary prognostic covariate | `SEX` | Include infant sex to balance this strong birth-weight predictor; treat it as prognostic, not an established confounder. |
+| Study-period adjustment field | `birth_year` | Include calendar year (2016-2024) as the eleventh categorical field in pooled-year models and all matching methods; it may capture secular changes in smoking patterns, population composition, care, and data collection. Obtain one outcome-blind LLM weight for the field. |
 | Sensitivity alternative | `CIG_0` instead of `CIG0_R` | Compare the more detailed daily count with the recode; do not enter both together. |
 | Sensitivity alternative | `PWgt_R` instead of `BMI_R` | Compare pre-pregnancy weight with BMI; do not enter both together by default. |
 | Sensitivity addition | `DMAR` | Add only as a sensitivity check because it is recorded at birth and may not represent marital status before pregnancy. |
@@ -97,9 +98,10 @@ describe how the gestational estimate was constructed.
   spaced numeric values.
 - Use the fixed encoding, preprocessing, covariance estimation, and
   field-to-column weight mapping in the
-  [analysis protocol](protocal_maternal_smoking_dataset.md) for matching. That protocol is the
-  single source of truth for the 23-column design and generalized Mahalanobis
-  distance.
+  [analysis protocol](protocal_maternal_smoking_dataset.md) for matching. That
+  protocol is the single source of truth for the 31-column design and
+  generalized Mahalanobis distance. The year field has eight Helmert columns;
+  its one field weight is repeated across those columns in the primary mapping.
 - Decide whether to add `DMAR` or other optional candidates in a sensitivity
   analysis after reviewing timing and missingness.
 - Exclude reporting flags from matching; use them to interpret item reporting.

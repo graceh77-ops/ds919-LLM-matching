@@ -22,16 +22,17 @@ own extraction or import code, harmonized schema, treatment and outcome
 definitions, covariates, matching configuration, and documentation. Reuse
 shared matching utilities only after their assumptions have been separated
 from Natality-specific fields and verified for the new dataset. Do not reuse
-Natality's 23-column encoding, smoking weights, cohort filters, or AIPW
+Natality's 31-column encoding, smoking weights, cohort filters, or AIPW
 specification automatically.
 
 ## Current application: CDC Natality
 
 The active application studies maternal smoking during pregnancy and infant
-birth weight in U.S. singleton births. Its current data layout is verified for
-2024. The code can read additional years after year-specific layouts and codes
-are checked, but pooled-year analysis choices still need review. It is not yet
-a general-purpose importer or matching engine for arbitrary datasets.
+birth weight in U.S. singleton births. The analysis design now includes
+2016-2024 birth year as an LLM-weighted covariate, but only the 2024 data
+layout is verified so far. Each additional annual layout and its codes must be
+reviewed before pooled analysis. The application is not a general-purpose
+importer or matching engine for arbitrary datasets.
 
 Start with:
 

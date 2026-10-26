@@ -16,7 +16,7 @@ from scipy.spatial import cKDTree
 
 
 NUMERIC_FIELDS = ("MAGER", "PRIORLIVE", "PRIORDEAD")
-CATEGORICAL_FIELDS = ("MRACEHISP", "MEDUC", "CIG0_R", "BMI_R")
+CATEGORICAL_FIELDS = ("MRACEHISP", "MEDUC", "CIG0_R", "BMI_R", "birth_year")
 BINARY_FIELDS = ("RF_PDIAB", "RF_PHYPE", "SEX")
 FIELD_ORDER = (
     "MAGER",
@@ -29,6 +29,7 @@ FIELD_ORDER = (
     "RF_PDIAB",
     "RF_PHYPE",
     "SEX",
+    "birth_year",
 )
 
 CATEGORY_LEVELS: Mapping[str, tuple[str, ...]] = {
@@ -36,6 +37,7 @@ CATEGORY_LEVELS: Mapping[str, tuple[str, ...]] = {
     "MEDUC": ("1-2", "3-4", "5-6", "7-8"),
     "CIG0_R": ("0", "1-2", "3", "4-5"),
     "BMI_R": ("1", "2", "3", "4", "5", "6"),
+    "birth_year": tuple(str(year) for year in range(2016, 2025)),
 }
 BINARY_LEVELS: Mapping[str, tuple[str, str]] = {
     "RF_PDIAB": ("N", "Y"),
@@ -69,7 +71,9 @@ def _clean_strings(values: pd.Series) -> pd.Series:
 
 def _categorical_values(field: str, values: pd.Series) -> pd.Series:
     cleaned = _clean_strings(values)
-    if field == "MEDUC":
+    if field == "birth_year":
+        cleaned = cleaned.str.replace(r"\.0$", "", regex=True)
+    elif field == "MEDUC":
         mapping = {
             "1": "1-2",
             "2": "1-2",
@@ -138,7 +142,7 @@ class NatalityFeatureTransform:
         return np.ascontiguousarray(np.column_stack(blocks), dtype=np.float64)
 
     def diagonal_field_weights(self, field_weights: Mapping[str, float] | None = None) -> np.ndarray:
-        """Expand ten field weights over encoded columns in the declared order.
+        """Expand eleven field weights over encoded columns in the declared order.
 
         With no argument, return the equal-weight identity baseline. Otherwise,
         require nonnegative weights for all fields and rescale them to mean 1.
@@ -291,7 +295,7 @@ def estimate_att(
 
 
 def fit_natality_transform(cohort: pd.DataFrame) -> NatalityFeatureTransform:
-    """Fit fixed 23-column encoding and covariance using cohort records."""
+    """Fit fixed 31-column encoding and covariance using cohort records."""
     required = set(FIELD_ORDER)
     missing = required - set(cohort.columns)
     if missing:

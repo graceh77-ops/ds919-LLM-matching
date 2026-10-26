@@ -2,12 +2,12 @@
 
 ## Research question
 
-Among 2024 U.S. live births represented in the Natality file, what is the
+Among U.S. singleton live births in the 2016-2024 Natality files, what is the
 effect of maternal smoking during pregnancy on birth weight?
 
 ## Target population
 
-- Primary analysis population: records with `DPLURAL = 1` (singleton births),
+- Primary analysis population: records from 2016-2024 with `DPLURAL = 1` (singleton births),
   known treatment status, and a valid birth weight.
 - Sensitivity population: records with known treatment status and a valid birth
   weight, regardless of plurality. This is the all-births cohort.
@@ -17,8 +17,9 @@ effect of maternal smoking during pregnancy on birth weight?
 
 ## Cohort construction
 
-- Start from the extracted 2024 U.S. Natality records, with one record per
-  birth.
+- Start from annual extracted U.S. Natality records for 2016-2024, with one
+  record per birth. Verify every annual layout and code harmonization before
+  pooling; only the 2024 layout is currently verified in this repository.
 - Exclude records with unknown or invalid treatment status (`CIG_REC` other
   than `Y` or `N`). Do not classify unknown status as unexposed.
 - Exclude records with unavailable or invalid birth weight. `DBWT = 9999` is
@@ -80,6 +81,10 @@ effect of maternal smoking during pregnancy on birth weight?
   one eligible control is available. Therefore, assess match quality with
   covariate balance, overlap, and the distribution of matched distances, not
   retention alone. A caliper can be evaluated later as a sensitivity analysis.
+- Use repeated treatment-by-year-stratified 99% reference / 1% test splits,
+  sampling without replacement within each treatment and birth-year stratum.
+  The same split is used for all methods in each repetition. These are
+  within-cohort resamples, not independent validation sets.
 - The primary reference-cohort estimator for the repeated 99% / 1%
   comparison is AIPW-ATT, using a reference-fitted propensity model and a
   control-only outcome model on the shared encoded covariates. IPW-ATT and
@@ -93,7 +98,7 @@ effect of maternal smoking during pregnancy on birth weight?
   test outcomes to fit the model or select matches.
   Model and matching details are specified in the
   [LLM matching protocol](../../docs/llm_matching/protocol_LLM_matching.md).
-- Include PCA Mahalanobis matching as a comparator: use the fixed 23 encoded
+- Include PCA Mahalanobis matching as a comparator: use the fixed 31 encoded
   covariate columns, standardize them on the pooled 1% test cohort, retain the
   minimum number of principal components reaching 90% cumulative explained
   variance, and match by ordinary Mahalanobis distance on the retained scores.
@@ -109,6 +114,11 @@ effect of maternal smoking during pregnancy on birth weight?
 
 - Primary set: `MAGER`, `MRACEHISP`, `MEDUC`, `CIG0_R`,
   `PRIORLIVE`, `PRIORDEAD`, `BMI_R`, `RF_PDIAB`, `RF_PHYPE`, and `SEX`.
+- Include `birth_year` (2016-2024) as the eleventh, categorical adjustment
+  field in the pooled-year analysis and include it in every AIPW and matching
+  method. It represents study period and may capture secular differences; it
+  is not a maternal characteristic. The current 2024-only data layout can
+  exercise only the 2024 level, so it does not validate pooled-year behavior.
 - Treat `SEX` as a prognostic covariate for birth weight, not as an established
   confounder.
 - Include `COMBGEST` only in a separately labeled sensitivity analysis because
@@ -128,20 +138,22 @@ effect of maternal smoking during pregnancy on birth weight?
   categorical fields: 6 for `MRACEHISP`, 3 for grouped `MEDUC`, 3 for grouped
   `CIG0_R`, and 5 for `BMI_R`. Encode `RF_PDIAB`, `RF_PHYPE`, and `SEX` as one
   binary contrast column each. With one column each for standardized `MAGER`,
-  `PRIORLIVE`, and `PRIORDEAD`, the design has 23 columns.
+  `PRIORLIVE`, and `PRIORDEAD`, plus eight contrasts for the nine birth-year
+  levels, the design has 31 columns.
 
   | Original field | Encoding | Encoded columns | Count |
   |---|---|---|---:|
   | `MAGER` | Standardized numeric | `MAGER` | 1 |
-  | `MRACEHISP` | Seven recognized levels, Helmert contrasts | `MRACEHISP_helmert_1`–`MRACEHISP_helmert_6` | 6 |
-  | `MEDUC` | Four grouped levels, Helmert contrasts | `MEDUC_helmert_1`–`MEDUC_helmert_3` | 3 |
-  | `CIG0_R` | Four grouped levels, Helmert contrasts | `CIG0_R_helmert_1`–`CIG0_R_helmert_3` | 3 |
+  | `MRACEHISP` | Seven recognized levels, Helmert contrasts | `MRACEHISP_helmert_1` through `MRACEHISP_helmert_6` | 6 |
+  | `MEDUC` | Four grouped levels, Helmert contrasts | `MEDUC_helmert_1` through `MEDUC_helmert_3` | 3 |
+  | `CIG0_R` | Four grouped levels, Helmert contrasts | `CIG0_R_helmert_1` through `CIG0_R_helmert_3` | 3 |
   | `PRIORLIVE` | Standardized numeric | `PRIORLIVE` | 1 |
   | `PRIORDEAD` | Standardized numeric | `PRIORDEAD` | 1 |
-  | `BMI_R` | Six recognized levels, Helmert contrasts | `BMI_R_helmert_1`–`BMI_R_helmert_5` | 5 |
+  | `BMI_R` | Six recognized levels, Helmert contrasts | `BMI_R_helmert_1` through `BMI_R_helmert_5` | 5 |
   | `RF_PDIAB` | Binary contrast | `RF_PDIAB_contrast` | 1 |
   | `RF_PHYPE` | Binary contrast | `RF_PHYPE_contrast` | 1 |
   | `SEX` | Binary contrast | `SEX_contrast` | 1 |
+  | `birth_year` | Nine levels (2016-2024), Helmert contrasts | `birth_year_helmert_1` through `birth_year_helmert_8` | 8 |
 
   The grouped `CIG0_R` levels are nonsmoker (0), light (codes 1-2), moderate
   (code 3), and heavy (codes 4-5), as specified in
@@ -161,10 +173,13 @@ effect of maternal smoking during pregnancy on birth weight?
   across methods and do not select its parameter based on test outcomes.
 - Use the full-covariance generalized Mahalanobis distance
   `d_V(x_i, x_j) = sqrt((x_i-x_j)' S^(-1/2) V S^(-1/2) (x_i-x_j))`.
-- Obtain one nonnegative LLM weight for each of the 10 original fields and
+- Obtain one nonnegative LLM weight for each of the 11 original fields and
   rescale those weights to have mean 1. Construct diagonal `V` by repeating
   each field's weight across every encoded column derived from that field.
-  The identity-matrix matching baseline uses `V = I` over the 23 encoded
+  The year field receives one LLM score, repeated across its eight encoded
+  contrasts by the primary mapping; the column-normalized sensitivity divides
+  the field score by the number of columns in its block. The identity-matrix
+  matching baseline uses `V = I` over the 31 encoded
   columns.
   This primary mapping preserves the stated formula but may give fields with
   more encoded columns greater effective influence.
@@ -172,7 +187,7 @@ effect of maternal smoking during pregnancy on birth weight?
   encoded columns in its block before assigning the corresponding diagonal
   entries of `V`. Keep encoding, preprocessing, and `S` unchanged for this
   comparison.
-- For PCA matching, z-standardize each of the 23 encoded columns using the
+- For PCA matching, z-standardize each of the 31 encoded columns using the
   pooled 1% test cohort's column means and population standard deviations
   (`ddof = 0`); use scale 1 for a constant encoded column. Fit PCA by SVD on
   this standardized test matrix, retaining the smallest component count whose
