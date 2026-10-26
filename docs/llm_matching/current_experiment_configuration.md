@@ -7,8 +7,8 @@ results below are historical 2024-only runs using the former ten-field schema.
 The active code schema targets 2016-2024. Annual layouts and shared analysis
 codes have been reviewed against the CDC guides. `F_PWGT` is retained for audit
 but is not an eligibility requirement because the selected field is `BMI_R`,
-not pre-pregnancy weight. Validate the full annual extractions before creating
-a new pooled cohort. New eleven-field LLM
+not pre-pregnancy weight. All nine annual extractions are complete (33,589,282
+records); combination and cohort preparation remain. New eleven-field LLM
 weight elicitation is also pending. The scope is the CDC Natality singleton cohort described in the
 [maternal smoking analysis protocol](../../cdc%20natality/docs/protocal_maternal_smoking_dataset.md).
 
@@ -17,7 +17,7 @@ weight elicitation is also pending. The scope is the CDC Natality singleton coho
 | Component | Current configuration |
 |---|---|
 | Default experiment input | `cdc natality/data/processed/pooled_2016_2024/analysis_cohort_singletons.csv`; the file will exist after annual extraction, combination, and cohort preparation |
-| Eligible cohort | 2016-2024 singleton births (`DPLURAL = 1`) with known smoking treatment, valid birth weight, flag-aware complete cases on the ten Natality covariates, and a valid birth year; `F_PWGT` is audited but is not required for eligibility; full-file extraction validation remains open |
+| Eligible cohort | 2016-2024 singleton births (`DPLURAL = 1`) with known smoking treatment, valid birth weight, flag-aware complete cases on the ten Natality covariates, and a valid birth year; annual extraction is complete, while pooling and cohort preparation remain |
 | Treatment | `CIG_REC = Y` versus `CIG_REC = N` |
 | Outcome | Birth weight, grams (`DBWT`) |
 | Estimand | ATT for treated births in each eligible cohort partition |

@@ -10,8 +10,10 @@ their field positions have been reviewed against the matching CDC User Guide.
 Guide-based code harmonization is complete for the included variables and no
 year-specific value maps are currently indicated. `F_PWGT` is retained for
 audit but is not an eligibility requirement because the selected covariate is
-`BMI_R`, not `PWgt_R`. Validate every raw record during extraction before
-pooled analysis. Year-agnostic means the analysis code can consume the
+`BMI_R`, not `PWgt_R`. All nine annual extractions completed: 33,589,282 raw
+records passed the configured fixed-width length check and produced matching
+43-column headers. Combining the files and preparing the pooled cohort remain.
+Year-agnostic means the analysis code can consume the
 shared schema; it does not mean annual source files have the same field
 positions, code definitions, or reporting flags.
 
@@ -102,14 +104,15 @@ corresponding eligibility check.
 Run the following commands from the `cdc natality/` application directory. If
 the terminal is at the repository root, first run `Set-Location "cdc natality"`.
 
-1. Extract each year using its verified layout. Repeat this for every year
-   from 2016 through 2024 after creating and reviewing that year's layout:
+1. Extract each year using its verified layout. The current outputs are stored
+   separately from earlier year-specific outputs under
+   `data/processed/pooled_2016_2024/annual/<year>/`:
 
    ```powershell
    python src/total_extraction.py --year 2016 `
      --layout config/natality_layouts/2016.json `
      --input data/raw/2016/<official-file-name>.txt `
-     --output data/processed/2016/extracted_natality.csv
+     --output data/processed/pooled_2016_2024/annual/2016/extracted_natality.csv
    ```
 
    Each layout's default input points to the exact raw filename present under
@@ -120,15 +123,15 @@ the terminal is at the repository root, first run `Set-Location "cdc natality"`.
 
    ```powershell
    python src/combine_natality_years.py `
-     --inputs data/processed/2016/extracted_natality.csv `
-             data/processed/2017/extracted_natality.csv `
-             data/processed/2018/extracted_natality.csv `
-             data/processed/2019/extracted_natality.csv `
-             data/processed/2020/extracted_natality.csv `
-             data/processed/2021/extracted_natality.csv `
-             data/processed/2022/extracted_natality.csv `
-             data/processed/2023/extracted_natality.csv `
-             data/processed/2024/extracted_natality.csv `
+     --inputs data/processed/pooled_2016_2024/annual/2016/extracted_natality.csv `
+             data/processed/pooled_2016_2024/annual/2017/extracted_natality.csv `
+             data/processed/pooled_2016_2024/annual/2018/extracted_natality.csv `
+             data/processed/pooled_2016_2024/annual/2019/extracted_natality.csv `
+             data/processed/pooled_2016_2024/annual/2020/extracted_natality.csv `
+             data/processed/pooled_2016_2024/annual/2021/extracted_natality.csv `
+             data/processed/pooled_2016_2024/annual/2022/extracted_natality.csv `
+             data/processed/pooled_2016_2024/annual/2023/extracted_natality.csv `
+             data/processed/pooled_2016_2024/annual/2024/extracted_natality.csv `
      --output data/processed/pooled_2016_2024/extracted_natality.csv
    ```
 
@@ -167,8 +170,9 @@ results and consider year-specific ATT summaries as a secondary description.
 The code schema now supports years 2016-2024. Nine annual layout JSON files
 have been prepared and their field positions reviewed against their
 year-specific guides. Common analysis codes have been reviewed and require no
-year-specific value maps. Extract and validate the nine raw files before
-pooled estimates can be produced. Historical ten-field/23-column
+year-specific value maps. Annual extraction is complete; combine the annual
+files and prepare the pooled cohort before pooled estimates can be produced.
+Historical ten-field/23-column
 results remain archived and are not directly comparable to the new
 eleven-field/31-column design. Raw and processed datasets are local inputs and
 must not be committed to Git.

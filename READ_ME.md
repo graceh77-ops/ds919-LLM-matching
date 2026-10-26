@@ -31,9 +31,11 @@ The active application studies maternal smoking during pregnancy and infant
 birth weight in U.S. singleton births. The analysis design now includes
 2016-2024 birth year as an LLM-weighted covariate. Raw public-use files for all
 nine years are present, and each year has a CDC User Guide-reviewed layout
-JSON. The shared variable codes are documented; `F_PWGT` is retained for audit
-but is not an eligibility requirement because the analysis uses the `BMI_R`
-recode. Full-file extraction validation remains before pooled analysis. The application is not a general-purpose
+JSON. All nine annual extractions have completed, yielding 33,589,282 records;
+each record passed the configured fixed-width length check. `F_PWGT` is
+retained for audit but is not an eligibility requirement because the analysis
+uses the `BMI_R` recode. The files still need to be combined and the pooled
+cohort prepared. The application is not a general-purpose
 importer or matching engine for arbitrary datasets.
 
 Start with:

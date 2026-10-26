@@ -9,22 +9,23 @@
   from Git. Their exact names and guide links are recorded in the annual layout
   JSON files.
 - The CDC guides specify 1,330-character records. The first local record read
-  from each of the nine files is 1,345 characters. Full-file extraction checks
-  every record against the configured local length; that complete check has not
-  yet been run for all years.
+  from each of the nine files is 1,345 characters. The extractor checked every
+  source record against the configured 1,345-character local length; all nine
+  extractions completed without length errors (33,589,282 records total).
 
 ## Record and extraction conventions
 
 - Positions below describe the current 2024 file and are 1-based and inclusive.
 - `src/total_extraction.py` extracts fields with a year-specific layout JSON.
   Each year has a guide-linked layout in `config/natality_layouts/<year>.json`;
-  the resulting file is `data/processed/<year>/extracted_natality.csv`. The script
+  the current files are in
+  `data/processed/pooled_2016_2024/annual/<year>/extracted_natality.csv`. The script
   adds `schema_version`, `birth_year`, and a year-prefixed unique
   `record_number`. The layouts' field positions are reviewed against their
   annual guides; shared analysis codes have been reviewed. `F_PWGT` is retained
   for audit but is not required for eligibility because the selected field is
-  `BMI_R`, not pre-pregnancy weight (`PWgt_R`). Full-file extraction validation
-  remains open before pooled use.
+  `BMI_R`, not pre-pregnancy weight (`PWgt_R`). The annual files share the same
+  43-column header; combining and preparing the pooled cohort remain.
 - Initial extraction preserves values as strings and does not recode blanks,
   unknown values, or not-stated values, except for any explicit per-year
   `value_maps` documented in a layout.

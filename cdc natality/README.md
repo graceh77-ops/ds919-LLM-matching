@@ -12,8 +12,9 @@ nine years are present under `data/raw/<year>/`. A separate fixed-width layout
 JSON has been prepared for each year from 2016 through 2024 and checked against
 the corresponding CDC User Guide. Shared code meanings are documented.
 `F_PWGT` is retained for audit but is not an eligibility requirement because
-the analysis uses `BMI_R`; full-file extraction validation remains before
-pooling. Existing experiment outputs use the earlier
+the analysis uses `BMI_R`. All nine annual extractions are complete
+(33,589,282 records); every source record passed the configured record-length
+check. Combining the extracts and preparing the pooled cohort remain. Existing experiment outputs use the earlier
 2024-only, ten-field design and are historical. The current AIPW and matching
 models are Natality-specific and do not automatically generalize to a
 different dataset.
@@ -42,18 +43,19 @@ From the repository root, enter this directory first:
 Set-Location "cdc natality"
 ```
 
-Extract each year using its matching layout JSON. From PowerShell, this loop
-runs the nine annual extractions with their configured raw filenames and output
-paths:
+The completed annual outputs are in
+`data/processed/pooled_2016_2024/annual/<year>/extracted_natality.csv`. To
+repeat the extraction without overwriting earlier year-specific outputs, use:
 
 ```powershell
 foreach ($year in 2016..2024) {
-    python src/total_extraction.py --year $year
+    $output = "data/processed/pooled_2016_2024/annual/$year/extracted_natality.csv"
+    python src/total_extraction.py --year $year --output $output
     if ($LASTEXITCODE -ne 0) { break }
 }
 ```
 
-After validating the nine annual extractions, combine the files and prepare the pooled analysis
+The nine extracted files have matching 43-column headers. Combine them and prepare the pooled analysis
 cohort using the commands in
 [`docs/multi_year_data_pipeline.md`](docs/multi_year_data_pipeline.md).
 
