@@ -1,65 +1,55 @@
-# Evaluating LLM-Assisted Matching
+# LLM-Assisted Matching
 
-This project compares LLM-assisted covariate weighting with conventional
-matching methods. The current application is maternal smoking during pregnancy
-and birth weight in the 2024 CDC Natality Public Use File. The project evaluates
-matching procedures; it does not establish a definitive causal effect.
+This repository develops and documents a workflow for comparing LLM-assigned
+covariate weights with conventional matching methods. Each dataset application
+needs its own definitions, eligibility rules, harmonization, covariates, and
+analysis configuration.
 
-The core question is whether covariate weights suggested by an LLM can improve
-matching and treatment-effect estimation compared with standard approaches.
-The analysis focuses on singleton births and uses pregnancy smoking as the
-treatment and infant birth weight as the outcome.
+## Repository structure
 
-## Project roadmap
+- [`docs/llm_matching/`](docs/llm_matching/protocol_LLM_matching.md) contains
+  the current matching and LLM weight-extraction protocols. Some documents
+  describe the current Natality implementation and are identified as such;
+  their study-specific choices are not universal defaults.
+- [CDC Natality application](cdc%20natality/README.md) contains its source
+  layouts, extraction and
+  analysis code, study documentation, local data folders, and results.
+- `requirements.txt` at the repository root lists the Python dependencies
+  used by the current application.
 
-1. **Prepare the Natality analysis cohort.** Apply the documented eligibility
-   rules, assemble the selected covariates, and complete data-quality checks.
-2. **Set consistent reference estimators and matching comparators.** Use
-   reference-cohort AIPW-ATT as the primary comparison estimate, with IPW and
-   outcome regression as separate reference sensitivities. Identity
-   Mahalanobis, PCA Mahalanobis, and PSM are matching comparators, like the
-   LLM-weighted methods.
-3. **Obtain LLM covariate weights in stages.** Start with a manual chat
-   interface, then use DeepSeek, and later use an advanced API/model. The LLM 
-   provides weights; the analysis design and matching rules are set separately.
-4. **Compare matching approaches.** Apply LLM weights and conventional
-   comparators within each 1% test sample. Fit matching preprocessing,
-   Mahalanobis covariance, PCA, and propensity scores using only that test
-   sample's covariates and treatment.
-5. **Evaluate against the reference estimate.** Use repeated,
-   treatment-stratified 99% reference / 1% test splits. Report error relative
-   to the reference-cohort AIPW-ATT estimate, not as error against the unknown
-   true causal effect. Differences between the reference and test cohorts may
-   contribute to this error.
-6. **Consider extensions later.** Additional Natality years may increase the
-   available sample after harmonization. ACIC 2016 remains a possible separate
-   benchmark for future discussion.
+For a future, unrelated dataset, create a separate application folder with its
+own extraction or import code, harmonized schema, treatment and outcome
+definitions, covariates, matching configuration, and documentation. Reuse
+shared matching utilities only after their assumptions have been separated
+from Natality-specific fields and verified for the new dataset. Do not reuse
+Natality's 23-column encoding, smoking weights, cohort filters, or AIPW
+specification automatically.
 
-## Start here
+## Current application: CDC Natality
 
-- [LLM matching protocol](docs/llm_matching/protocol_LLM_matching.md): staged
-  manual and API workflow, reference comparison, methods, and evaluation.
-- [Manual-chat weight protocol](docs/llm_matching/weight%20extraction%20protocol/manual_chat_weight_protocol.md)
-  and [DeepSeek API setup](docs/llm_matching/weight%20extraction%20protocol/deepseek_api_setup.md):
-  outcome-blind weight elicitation steps.
-- [Natality analysis protocol](docs/maternal_smoking_birthweight/protocal_maternal_smoking_dataset.md):
-  study population, variables, matching distance, and analysis decisions.
-- [Covariate review](docs/maternal_smoking_birthweight/covariate_review.md):
-  candidate variables, rationale, and coding decisions.
-- [Data reference](docs/maternal_smoking_birthweight/data_reference.md): source
-  file and extraction details.
-- [Multi-year data pipeline](docs/maternal_smoking_birthweight/multi_year_data_pipeline.md):
-  annual layout configuration, shared extraction schema, pooling workflow, and
-  decisions needed before interpreting pooled-year results.
+The active application studies maternal smoking during pregnancy and infant
+birth weight in U.S. singleton births. Its current data layout is verified for
+2024. The code can read additional years after year-specific layouts and codes
+are checked, but pooled-year analysis choices still need review. It is not yet
+a general-purpose importer or matching engine for arbitrary datasets.
 
-## Current status
+Start with:
 
-The 2024 Natality extraction, initial full-data QC, and analysis-cohort
-preparation are complete. The project has manual-chat and DeepSeek weight
-records. The matching workflow uses reference-cohort AIPW-ATT as its primary
-pseudo-reference estimate. Full-cohort runs are exploratory; the final split count
-and seed plan have not been frozen. The recorded DeepSeek API weights are the
-default for future LLM-weighted runs.
+- [Natality analysis protocol](cdc%20natality/docs/maternal_smoking_birthweight/protocal_maternal_smoking_dataset.md)
+- [Natality data reference](cdc%20natality/docs/maternal_smoking_birthweight/data_reference.md)
+- [Multi-year Natality pipeline](cdc%20natality/docs/maternal_smoking_birthweight/multi_year_data_pipeline.md)
+- [Current matching protocol](docs/llm_matching/protocol_LLM_matching.md)
+- [Current experiment configuration](docs/llm_matching/current_experiment_configuration.md)
 
-Raw and processed data are local project inputs and must not be committed to
-Git. See `.gitignore` for the repository rules.
+To work with the Natality application, change to its folder before running its
+scripts:
+
+```powershell
+Set-Location "cdc natality"
+python src/total_extraction.py
+python src/prepare_analysis_data.py
+```
+
+The extraction command uses the local 2024 raw file by default. Raw and
+processed data are ignored by Git and must remain local; commit code,
+configuration, and documentation only when appropriate.

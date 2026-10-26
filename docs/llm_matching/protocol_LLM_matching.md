@@ -4,11 +4,13 @@
 
 Evaluate whether LLM-assisted covariate weighting improves matching quality
 and treatment-effect estimation compared with conventional matching methods.
-The current application is the 2024 CDC Natality study of maternal smoking
-during pregnancy and birth weight. Study-specific cohort and variable
-definitions are maintained in the
-[Natality analysis protocol](../maternal_smoking_birthweight/protocal_maternal_smoking_dataset.md).
-ACIC 2016 is a possible future benchmark, outside the current scope.
+This document records the current **CDC Natality implementation** as a worked
+application of the workflow. Its estimator, split, encoding, covariate, and
+matching choices are study-specific. A different dataset needs its own
+protocol and configuration; do not assume these specifications transfer
+without review. Study-specific cohort and variable definitions are maintained
+in the [Natality analysis protocol](../../cdc%20natality/docs/maternal_smoking_birthweight/protocal_maternal_smoking_dataset.md).
+ACIC 2016 remains a possible future benchmark, outside the current scope.
 
 ## Research question
 
@@ -107,7 +109,7 @@ Apply the same covariate-weighting task and Natality design in three stages:
    and [standalone prompt](weight%20extraction%20protocol/llm_prompt_covariate_weights.md).
    Preserve the recorded weights as a separate method input for comparison.
 2. **DeepSeek API:** apply the same weighting task through the separate
-   implementation in [`src/get_deepseek_weights.py`](../../src/get_deepseek_weights.py).
+   implementation in [`cdc natality/src/get_deepseek_weights.py`](../../cdc%20natality/src/get_deepseek_weights.py).
    Preserve its exact prompt, settings, returned weights, and API response in
    the timestamped run record; the currently selected outcome-blind DeepSeek
    weights are the default input for matching runs. The manual-chat weights
@@ -200,6 +202,7 @@ matching specifications, reference estimator, and metric calculations before
 the final method comparison. Preserve enough outputs to reproduce each
 method's estimate and diagnostic for each split. By default, each run's
 detailed results, method summary, and encoded-column feature map are saved in
-a new dated `{repeats}-split YYYYMMDD` folder under `results/matching results/`;
+a new dated `{repeats}-split YYYYMMDD` folder under
+`cdc natality/results/matching results/`;
 see the [current experiment configuration](current_experiment_configuration.md)
 for the file naming convention and recorded runs.

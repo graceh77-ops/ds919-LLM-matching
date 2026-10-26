@@ -2,6 +2,10 @@
 
 ## Purpose
 
+This procedure is reusable, but the linked prompt and its ten covariates are
+specific to the CDC Natality application. A different dataset needs a new
+outcome-blind prompt and matching weight schema.
+
 Generate one reproducible set of manual-chat covariate-priority weights without
 exposing the LLM to empirical outcome or matching results. This document
 specifies the elicitation procedure; the prompt itself is kept separately in
@@ -19,7 +23,8 @@ specifies the elicitation procedure; the prompt itself is kept separately in
 4. Validate that the response is a JSON object with exactly the ten required
    field names, integer values from 0 through 10, and at least one positive
    value. Do not alter individual scores manually.
-5. Save the validated scores in
+5. From the repository root, run `Set-Location "cdc natality"`. Save the
+   validated scores in
    `results/matching results/manual_chat_weights_outcome.json`. Save the
    elicitation record in
    `results/matching results/manual_chat_weight_record_outcome.md`.

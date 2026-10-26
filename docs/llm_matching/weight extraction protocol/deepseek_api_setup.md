@@ -2,6 +2,10 @@
 
 ## Purpose and separation
 
+This API workflow can be reused for another dataset only after its prompt,
+weight schema, and output location are defined independently. The prompt and
+saved weights referenced here are specific to the current Natality study.
+
 This script requests one outcome-blind set of covariate-priority weights from
 DeepSeek. It sends only the text between the delimiters in
 [`llm_prompt_covariate_weights.md`](llm_prompt_covariate_weights.md). It does
@@ -12,10 +16,12 @@ metrics.
 
 1. Create an API key through your DeepSeek account. Keep the key private. If a
    key was exposed, revoke it and use a newly created key.
-2. In a PowerShell terminal opened at the project root, set the key for that
+2. In a PowerShell terminal opened at the repository root, change to the
+   Natality application folder and set the key for that
    terminal session. This prompts without echoing the key as you type or paste:
 
    ```powershell
+   Set-Location "cdc natality"
    $env:DEEPSEEK_API_KEY = [System.Net.NetworkCredential]::new("", (Read-Host "DeepSeek API key" -AsSecureString)).Password
    ```
 
@@ -36,7 +42,7 @@ metrics.
    model, set `DEEPSEEK_MODEL` before running.
 4. Keep the terminal open until it reports success or an error. A successful
    run writes a timestamped folder under
-  `results/matching results/deepseek_api/` with the validated weights, raw
+   `results/matching results/deepseek_api/` (relative to `cdc natality/`) with the validated weights, raw
    API response, raw model text, exact prompt, and request metadata.
 5. Review the saved record and weights before using them in matching. Do not
    change the scores manually. If the response fails validation, the raw output

@@ -86,13 +86,13 @@ effect of maternal smoking during pregnancy on birth weight?
   outcome-regression ATT are reported separately as reference sensitivities.
   Estimator formulas, model specifications, diagnostics, and evaluation
   metrics are specified in the
-  [LLM matching protocol](../llm_matching/protocol_LLM_matching.md).
+  [LLM matching protocol](../../../docs/llm_matching/protocol_LLM_matching.md).
 - Include an initial propensity-score comparator: fit an unpenalized logistic
   treatment model using only treatment and covariates from the 1% test portion,
   then match those test births on the fitted logit propensity score. Do not use
   test outcomes to fit the model or select matches.
   Model and matching details are specified in the
-  [LLM matching protocol](../llm_matching/protocol_LLM_matching.md).
+  [LLM matching protocol](../../../docs/llm_matching/protocol_LLM_matching.md).
 - Include PCA Mahalanobis matching as a comparator: use the fixed 23 encoded
   covariate columns, standardize them on the pooled 1% test cohort, retain the
   minimum number of principal components reaching 90% cumulative explained

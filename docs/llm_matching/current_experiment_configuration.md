@@ -6,7 +6,7 @@ This document records the current implementation and configuration. AIPW and
 the test-only matching workflow have been checked in development pilots and
 exploratory full-cohort runs recorded below.
 The scope is the 2024 CDC Natality singleton cohort described in the
-[maternal smoking analysis protocol](../maternal_smoking_birthweight/protocal_maternal_smoking_dataset.md).
+[maternal smoking analysis protocol](../../cdc%20natality/docs/maternal_smoking_birthweight/protocal_maternal_smoking_dataset.md).
 
 ## Frozen shared configuration
 
@@ -22,7 +22,7 @@ The scope is the 2024 CDC Natality singleton cohort described in the
 | Eigenvalue floor | `1e-8` times the largest covariance eigenvalue; floor every lower eigenvalue at that threshold before inverse-square-root construction |
 | Generalized Mahalanobis | `d_V(x_i,x_j) = sqrt((x_i-x_j)' S^(-1/2) V S^(-1/2)(x_i-x_j))`; identity method uses `V = I` |
 | Field-weight mapping | Rescale ten nonnegative field scores to mean 1, then repeat each field score on all columns from that field; column-normalized allocation is a separately labeled sensitivity method |
-| Default LLM weights | Outcome-blind DeepSeek API weights from `results/matching results/deepseek_api/20261022T081027Z/weights.json`; pass `--weights-json` to select another set, such as manual-chat weights |
+| Default LLM weights | Outcome-blind DeepSeek API weights from `cdc natality/results/matching results/deepseek_api/20261022T081027Z/weights.json`; pass `--weights-json` to select another set, such as manual-chat weights |
 | PCA comparator | Z-standardize all 23 encoded columns using pooled 1% test covariates (`ddof = 0`); fit PCA there; retain the minimum component count reaching 90% cumulative explained variance; use ordinary Mahalanobis distance from retained score covariance, with the `1e-8` relative eigenvalue floor and no additional explained-variance weighting |
 | Match rule | 1:1 nearest neighbor, with replacement, no caliper; ties within the coded tolerance resolve to the smallest source `record_number` |
 | Split | Treatment-stratified random 99% reference / 1% test, without replacement within each treatment stratum; use the same split for methods in a repetition |
@@ -68,10 +68,10 @@ run with one split (seed `20261022`, dated `20261023`) and two splits (seed
 `20261022`, dated `20261024`), both using a 1% test fraction and the
 outcome-blind manual-chat weights. These are exploratory comparisons, not a
 final repeated-split evaluation. The manual-chat outputs are in
-`results/matching results/1-split 20261023/` and
-`results/matching results/2-split 20261024/`. A paired two-split DeepSeek API
+`cdc natality/results/matching results/1-split 20261023/` and
+`cdc natality/results/matching results/2-split 20261024/`. A paired two-split DeepSeek API
 run used the same seed (`20261022`) and 1% test fraction; its outputs are in
-`results/matching results/2-split 20261024 (2)/`. This run recalculated all
+`cdc natality/results/matching results/2-split 20261024 (2)/`. This run recalculated all
 methods on the same partitions, and its conventional comparator results match
 the manual-chat run. This default records the project’s chosen standard input 
 and does not imply that the two-split results establish DeepSeek as superior. 
@@ -79,8 +79,8 @@ The earlier development pilot used a 10,000-row random subset and a 20% test
 fraction. The final repetition count and seed plan remain open and must be 
 recorded before the next comparison. The first AIPW implementation validation 
 also used the existing 10,000-row pilot mode, one split, seed `20261022`, and 
-20% test fraction; its outputs are `results/pilot runs/aipw_reference_validation.csv` 
-and `results/pilot runs/aipw_reference_validation_summary.csv`. 
+20% test fraction; its outputs are `cdc natality/results/pilot runs/aipw_reference_validation.csv`
+and `cdc natality/results/pilot runs/aipw_reference_validation_summary.csv`.
 
 The PCA implementation validation used a 10,000-row random subset, one split,
 seed `20261023`, a 20% test fraction, and the outcome-blind manual-chat weights
@@ -88,13 +88,13 @@ for the weighted comparison methods. It retained 17 PCs explaining
 `0.912918` cumulative variance. The PCA row reported a test ATT of
 `-153.16` grams (control-clustered SE `130.63` grams); these are development
 pilot outputs, not study estimates. Detailed rows, method summary, and the
-23-row encoded-column source map are in `results/pilot runs/`:
+23-row encoded-column source map are in `cdc natality/results/pilot runs/`:
 `pca_validation_20261023.csv`,
 `pca_validation_20261023_summary.csv`, and
 `pca_validation_20261023_feature_map.csv`.
 
 By default, each experiment run writes to a new dated folder under
-`results/matching results/`, named `{repeats}-split YYYYMMDD` (for example,
+`cdc natality/results/matching results/`, named `{repeats}-split YYYYMMDD` (for example,
 `20-split 20261024`). The folder contains `complete_information.csv` (one row
 per method and split), `summary.csv` (aggregated by method), and
 `complete_information_feature_map.csv`. A numbered suffix is added if the

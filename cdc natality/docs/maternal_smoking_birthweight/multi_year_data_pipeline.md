@@ -47,6 +47,9 @@ corresponding eligibility check.
 
 ## Workflow
 
+Run the following commands from the `cdc natality/` application directory. If
+the terminal is at the repository root, first run `Set-Location "cdc natality"`.
+
 1. Extract each year using its verified layout. For example, after creating
    and reviewing the 2023 layout:
 
