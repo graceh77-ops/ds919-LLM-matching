@@ -14,10 +14,19 @@
 ## Record and extraction conventions
 
 - Positions below are 1-based and inclusive, following the User Guide.
-- `src/total_extraction.py` extracts the listed fields from the fixed-width
-  records into `data/processed/2024/extracted_natality.csv`.
+- `src/total_extraction.py` extracts fields with a year-specific layout JSON.
+  The verified 2024 layout is in `config/natality_layouts/2024.json`; the
+  resulting file is `data/processed/2024/extracted_natality.csv`. The script
+  adds `schema_version`, `birth_year`, and a year-prefixed unique
+  `record_number`. Other years require a layout verified against that year's
+  CDC User Guide before use.
 - Initial extraction preserves values as strings and does not recode blanks,
-  unknown values, or not-stated values.
+  unknown values, or not-stated values, except for any explicit per-year
+  `value_maps` documented in a layout.
+
+See the [multi-year data pipeline](multi_year_data_pipeline.md) for the shared
+schema, annual layout process, pooling, and methodological decisions required
+before a pooled-year analysis.
 - Reporting flags are retained for data-quality review and are not matching
   covariates.
 

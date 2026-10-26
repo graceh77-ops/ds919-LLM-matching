@@ -48,6 +48,9 @@ treatment and infant birth weight as the outcome.
   candidate variables, rationale, and coding decisions.
 - [Data reference](docs/maternal_smoking_birthweight/data_reference.md): source
   file and extraction details.
+- [Multi-year data pipeline](docs/maternal_smoking_birthweight/multi_year_data_pipeline.md):
+  annual layout configuration, shared extraction schema, pooling workflow, and
+  decisions needed before interpreting pooled-year results.
 
 ## Current status
 

@@ -1,3 +1,4 @@
+import argparse
 import csv
 from collections import Counter
 from pathlib import Path
@@ -5,16 +6,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-# Change this filename if your full extraction has a different name.
-INPUT_CSV = PROJECT_ROOT / "data" / "processed" / "2024" / "extracted_natality.csv"
-
-OUTPUT_CSV = (
-    PROJECT_ROOT / "data" / "processed" / "2024" / "analysis_cohort_singletons.csv"
-)
-SENSITIVITY_OUTPUT_CSV = (
-    PROJECT_ROOT / "data" / "processed" / "2024" / "analysis_cohort_all_births.csv"
-)
-SUMMARY_MD = PROJECT_ROOT / "results" / "full_data_qc_summary.md"
+DEFAULT_INPUT = PROJECT_ROOT / "data" / "processed" / "2024" / "extracted_natality.csv"
 
 TREATMENT_COLUMN = "CIG_REC"
 OUTCOME_COLUMN = "DBWT"
@@ -47,16 +39,36 @@ REQUIRED_REPORTING_FLAGS = (
 )
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Prepare a harmonized Natality analysis cohort.")
+    parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--all-births-output", type=Path)
+    parser.add_argument("--summary", type=Path)
+    return parser.parse_args()
+
+
 def main():
-    if not INPUT_CSV.exists():
+    args = parse_args()
+    input_csv = args.input.resolve()
+    output_csv = args.output or input_csv.with_name("analysis_cohort_singletons.csv")
+    sensitivity_output_csv = args.all_births_output or input_csv.with_name(
+        "analysis_cohort_all_births.csv"
+    )
+    summary_md = args.summary or PROJECT_ROOT / "results" / (
+        "full_data_qc_summary.md" if input_csv == DEFAULT_INPUT.resolve()
+        else f"full_data_qc_summary_{input_csv.parent.name}.md"
+    )
+
+    if not input_csv.exists():
         raise FileNotFoundError(
-            f"Input file not found: {INPUT_CSV}\n"
-            "Update INPUT_CSV to the filename of your full extracted dataset."
+            f"Input file not found: {input_csv}\n"
+            "Run src/total_extraction.py with a verified layout or provide --input."
         )
 
-    OUTPUT_CSV.parent.mkdir(parents=True, exist_ok=True)
-    SENSITIVITY_OUTPUT_CSV.parent.mkdir(parents=True, exist_ok=True)
-    SUMMARY_MD.parent.mkdir(parents=True, exist_ok=True)
+    output_csv.parent.mkdir(parents=True, exist_ok=True)
+    sensitivity_output_csv.parent.mkdir(parents=True, exist_ok=True)
+    summary_md.parent.mkdir(parents=True, exist_ok=True)
 
     input_rows = 0
     treatment_values = Counter()
@@ -75,8 +87,9 @@ def main():
     incomplete_case_treatment_values = Counter()
     singleton_complete_case_treatment_values = Counter()
     singleton_incomplete_case_treatment_values = Counter()
+    final_by_year_treatment = Counter()
 
-    with INPUT_CSV.open("r", encoding="utf-8-sig", newline="") as source:
+    with input_csv.open("r", encoding="utf-8-sig", newline="") as source:
         reader = csv.DictReader(source)
 
         if reader.fieldnames is None:
@@ -99,8 +112,8 @@ def main():
             if column not in output_columns:
                 output_columns.append(column)
 
-        with OUTPUT_CSV.open("w", encoding="utf-8", newline="") as target, \
-                SENSITIVITY_OUTPUT_CSV.open("w", encoding="utf-8", newline="") as sensitivity_target:
+        with output_csv.open("w", encoding="utf-8", newline="") as target, \
+                sensitivity_output_csv.open("w", encoding="utf-8", newline="") as sensitivity_target:
             writer = csv.DictWriter(target, fieldnames=output_columns)
             sensitivity_writer = csv.DictWriter(
                 sensitivity_target, fieldnames=output_columns
@@ -168,6 +181,8 @@ def main():
 
                 if complete_case:
                     sensitivity_writer.writerow(row)
+                    year = (row.get("birth_year") or "unknown").strip()
+                    final_by_year_treatment[(year, treatment)] += 1
                     if (row.get(DPLURAL_COLUMN) or "").strip() == "1":
                         writer.writerow(row)
 
@@ -183,13 +198,19 @@ def main():
         min_birthweight = "N/A"
         max_birthweight = "N/A"
 
+    year_breakdown = "\n".join(
+        f"- {year}: `CIG_REC = Y` {final_by_year_treatment[(year, 'Y')]:,}; "
+        f"`CIG_REC = N` {final_by_year_treatment[(year, 'N')]:,}"
+        for year in sorted({key[0] for key in final_by_year_treatment})
+    ) or "- No year field was supplied."
+
     summary = f"""# Full Data Quality Summary
 
 ## Input and output
 
-- Input file: `{INPUT_CSV.relative_to(PROJECT_ROOT)}`
-- Primary analysis cohort (singleton births): `{OUTPUT_CSV.relative_to(PROJECT_ROOT)}`
-- Sensitivity cohort (all eligible births): `{SENSITIVITY_OUTPUT_CSV.relative_to(PROJECT_ROOT)}`
+- Input file: `{display_path(input_csv)}`
+- Primary analysis cohort (singleton births): `{display_path(output_csv)}`
+- Sensitivity cohort (all eligible births): `{display_path(sensitivity_output_csv)}`
 - Input rows: {input_rows:,}
 - All-births eligible rows before covariate filtering: {included_rows:,}
 - Singleton primary eligible rows before covariate filtering (`DPLURAL = 1`): {eligible_singletons:,}
@@ -225,6 +246,8 @@ def main():
 - Flag-aware complete-case singleton `N`: {singleton_complete_case_treatment_values["N"]:,}
 - Flag-aware complete-case singleton excluded `Y`: {singleton_incomplete_case_treatment_values["Y"]:,}
 - Flag-aware complete-case singleton excluded `N`: {singleton_incomplete_case_treatment_values["N"]:,}
+- Final all-births eligible records by birth year and treatment:
+{year_breakdown}
 - Birth weight unit: grams
 - Valid birth weight minimum: {min_birthweight}
 - Valid birth weight maximum: {max_birthweight}
@@ -237,13 +260,20 @@ eligible; their imputation flags are retained for audit. Gestational age is not
 part of this primary eligibility rule.
 """
 
-    SUMMARY_MD.write_text(summary, encoding="utf-8")
+    summary_md.write_text(summary, encoding="utf-8")
 
     print(f"Input rows: {input_rows:,}")
     print(f"All-births cohort rows: {included_rows:,}")
     print(f"Singleton primary cohort rows: {eligible_singletons:,}")
-    print(f"Analysis cohort: {OUTPUT_CSV}")
-    print(f"QC summary: {SUMMARY_MD}")
+    print(f"Analysis cohort: {output_csv}")
+    print(f"QC summary: {summary_md}")
+
+
+def display_path(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(PROJECT_ROOT))
+    except ValueError:
+        return str(path.resolve())
 
 
 def format_counts(counts):

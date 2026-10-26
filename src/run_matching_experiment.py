@@ -46,7 +46,9 @@ INPUT_COLUMNS = [
     *FIELD_ORDER,
 ]
 INPUT_DTYPES = {
-    "record_number": "int32",
+    # Annual extracts use year-prefixed integer IDs so IDs remain unique when
+    # several annual cohorts are pooled.
+    "record_number": "int64",
     "treatment_binary": "int8",
     "birthweight_g": "int16",
     "MAGER": "int8",
@@ -704,6 +706,11 @@ def run_experiment(
         low_memory=False,
     )
     treatment = data["treatment_binary"].to_numpy(dtype=np.int8)
+    if data["record_number"].duplicated().any():
+        raise ValueError(
+            "record_number values must be unique. For pooled years, create the "
+            "annual extracts with src/total_extraction.py so IDs include birth year."
+        )
     if not np.isin(treatment, (0, 1)).all():
         raise ValueError("treatment_binary must contain only 0 and 1.")
     rng = np.random.default_rng(seed)
