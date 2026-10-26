@@ -6,9 +6,9 @@ when estimating the effect of maternal smoking during pregnancy on birth weight?
 
 ## 2. Data
 - Source: CDC Natality public-use data
-- Target years: 2016-2024. Raw 2023 and 2024 public-use files are present;
-  only the 2024 layout is verified. Pooled analysis awaits review of the 2023
-  layout and year-specific code harmonization for all included years.
+- Target years: 2016-2024. All nine raw public-use files are present and each
+  year has a guide-reviewed layout JSON. Pooled analysis awaits cross-year
+  value-code harmonization and full-file extraction validation.
 - Unit of observation: one live-birth record
 - Study population: singleton live births for the primary analysis; all births
   with known treatment and valid birth weight for sensitivity analysis

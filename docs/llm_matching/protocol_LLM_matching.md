@@ -91,7 +91,8 @@ matching. The pooled 2016-2024 design adds calendar year as an eleventh,
 categorical, LLM-weighted adjustment field. Year is represented by eight
 fixed Helmert contrasts; a single field-level LLM score maps to those columns
 using the documented repeated-weight rule. Annual layouts and codes still
-need harmonization, and only 2024 is currently verified. Do not run pooled
+have guide-reviewed layouts, but value-code harmonization and full-file
+extraction validation remain. Do not run pooled
 comparisons until the year-specific inputs and coding have passed review.
 
 The historical runs used one split and seed `20261022`. A final repetition

@@ -29,10 +29,10 @@ specification automatically.
 
 The active application studies maternal smoking during pregnancy and infant
 birth weight in U.S. singleton births. The analysis design now includes
-2016-2024 birth year as an LLM-weighted covariate. Raw public-use files for
-2023 and 2024 are present, but only the 2024 data layout is verified so far.
-The 2023 layout and each additional annual layout and its codes must be
-reviewed before pooled analysis. The application is not a general-purpose
+2016-2024 birth year as an LLM-weighted covariate. Raw public-use files for all
+nine years are present, and each year has a CDC User Guide-reviewed layout
+JSON. Cross-year value-code harmonization and full-file extraction validation
+remain before pooled analysis. The application is not a general-purpose
 importer or matching engine for arbitrary datasets.
 
 Start with:

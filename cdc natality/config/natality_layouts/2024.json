@@ -1,6 +1,6 @@
 {
   "year": 2024,
-  "source": "CDC/NCHS 2024 Natality Public Use File; positions checked against the 2024 User Guide and existing extraction",
+  "source": "CDC/NCHS User Guide to the 2024 Natality Public Use File: https://ftp.cdc.gov/pub/Health_Statistics/NCHS/Dataset_Documentation/DVS/natality/UserGuide2024.pdf",
   "default_input": "data/raw/2024/Nat2024PublicUS.c20250512.r20250708.txt",
   "default_output": "data/processed/2024/extracted_natality.csv",
   "expected_record_length": 1345,
@@ -46,5 +46,9 @@
     "DBWT": [504, 507],
     "BWTR12": [509, 510],
     "BWTR4": [511, 511]
-  }
+  },
+  "guide_record_length": 1330,
+  "local_first_record_length": 1345,
+  "layout_status": "Field positions reviewed against the year-specific CDC User Guide; full-file extraction validation pending.",
+  "record_length_note": "The CDC User Guide reports a 1330-character record layout. The local raw file first record is 1345 characters; extraction checks every record against 1345 before accepting the output."
 }

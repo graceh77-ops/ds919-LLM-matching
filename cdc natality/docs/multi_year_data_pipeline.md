@@ -4,11 +4,11 @@
 
 The scripts use a shared annual extraction schema so verified CDC Natality
 layouts can feed the same cohort-preparation and matching programs. Raw public-
-use files for **2023 and 2024** are present under `data/raw/<year>/`; the
-layout in this repository is verified for **2024 only**. The 2023 file is not
-ready for extraction until its layout is checked against the 2023 CDC User
-Guide. Layouts for 2022, 2010, and any other year also need year-specific
-review. Year-agnostic means the analysis code can consume the
+use files for **2016 through 2024** are present under `data/raw/<year>/`.
+Separate layout JSON files for each year are in `config/natality_layouts/` and
+their field positions have been reviewed against the matching CDC User Guide.
+Cross-year value-code harmonization and full-file extraction validation remain
+before pooled analysis. Year-agnostic means the analysis code can consume the
 shared schema; it does not mean annual source files have the same field
 positions, code definitions, or reporting flags.
 
@@ -41,13 +41,16 @@ within-file row number is also preserved in `source_record_number`.
 
 ## Prepare an annual layout
 
-Create `config/natality_layouts/<year>.json` using the structure in
-[`config/natality_layouts/2024.json`](../config/natality_layouts/2024.json).
-Verify the file encoding, record length, every 1-based inclusive position,
-variable definitions, code sets, and reporting-flag meanings against that
-year's official User Guide. The `fields` keys are canonical project names;
-their values are source positions for that year. If codes differ, document
-and add explicit `value_maps` only after reviewing the source definitions.
+Each annual JSON uses the structure in
+[`config/natality_layouts/2024.json`](../config/natality_layouts/2024.json),
+with its own source-guide link, raw filename, output path, and source positions.
+Each CDC guide lists a 1,330-character record layout. The first local record in
+each raw file is 1,345 characters; each config records this observed length,
+and the extractor checks all records against it. A full extraction has not yet
+validated every line. The `fields` keys are canonical project names; their
+values are that year's 1-based inclusive source positions. Cross-year code
+definitions and reporting-flag behavior must still be checked before pooling;
+document any confirmed changes using explicit `value_maps`.
 
 For a year whose variables or reporting rules cannot be mapped to the current
 schema without changing their meaning, stop and review the cohort rules. Do
@@ -69,10 +72,8 @@ the terminal is at the repository root, first run `Set-Location "cdc natality"`.
      --output data/processed/2016/extracted_natality.csv
    ```
 
-   The 2024 defaults point to the existing file directly under
-   `data/raw/2024/`. The 2023 file is also directly under `data/raw/2023/`,
-   but do not extract it until `config/natality_layouts/2023.json` has been
-   verified against its User Guide.
+   Each layout's default input points to the exact raw filename present under
+   `data/raw/<year>/`; defaults can be overridden with `--input` and `--output`.
 
 2. Combine the nine annual extractions. The combiner checks identical column
    schemas and distinct year labels:
@@ -117,11 +118,10 @@ field allocation as a sensitivity method. Split each treatment-by-year
 stratum into the 99% reference and 1% test portions. Also report pooled
 results and consider year-specific ATT summaries as a secondary description.
 
-The code schema now supports years 2016-2024, but annual extraction layouts
-and code harmonization still need year-by-year review. Raw files for 2023 and
-2024 are present; only the 2024 layout is currently verified, so pooled
-estimates must wait until the 2023 layout and all other annual inputs are
-extracted and checked. Historical ten-field/23-column
+The code schema now supports years 2016-2024. Nine annual layout JSON files
+have been prepared and their field positions reviewed against their
+year-specific guides. Cross-year value-code harmonization and extraction of
+the nine raw files remain before pooled estimates can be produced. Historical ten-field/23-column
 results remain archived and are not directly comparable to the new
 eleven-field/31-column design. Raw and processed datasets are local inputs and
 must not be committed to Git.

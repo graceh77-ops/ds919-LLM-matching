@@ -14,7 +14,7 @@ weight elicitation. The scope is the CDC Natality singleton cohort described in 
 | Component | Current configuration |
 |---|---|
 | Default experiment input | `cdc natality/data/processed/pooled_2016_2024/analysis_cohort_singletons.csv`; the file will exist after annual extraction, combination, and cohort preparation |
-| Eligible cohort | 2016-2024 singleton births (`DPLURAL = 1`) with known smoking treatment, valid birth weight, flag-aware complete cases on the ten Natality covariates, and a valid birth year; only the 2024 layout is currently verified |
+| Eligible cohort | 2016-2024 singleton births (`DPLURAL = 1`) with known smoking treatment, valid birth weight, flag-aware complete cases on the ten Natality covariates, and a valid birth year; annual layouts have been reviewed, while value-code harmonization and full-file extraction validation remain pending |
 | Treatment | `CIG_REC = Y` versus `CIG_REC = N` |
 | Outcome | Birth weight, grams (`DBWT`) |
 | Estimand | ATT for treated births in each eligible cohort partition |

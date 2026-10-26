@@ -7,10 +7,11 @@ pregnancy and infant birth weight.
 ## Scope and status
 
 The active design targets 2016-2024 singleton births and includes `birth_year`
-as an eleventh categorical, LLM-weighted field. Raw public-use files for 2023
-and 2024 are present under their year folders. Only the 2024 fixed-width
-layout has been verified; the 2023 file needs a reviewed layout and documented
-code harmonization before extraction. Existing experiment outputs use the earlier
+as an eleventh categorical, LLM-weighted field. Raw public-use files for all
+nine years are present under `data/raw/<year>/`. A separate fixed-width layout
+JSON has been prepared for each year from 2016 through 2024 and checked against
+the corresponding CDC User Guide. Cross-year value-code harmonization and
+full-file extraction validation remain before pooling. Existing experiment outputs use the earlier
 2024-only, ten-field design and are historical. The current AIPW and matching
 models are Natality-specific and do not automatically generalize to a
 different dataset.
@@ -39,12 +40,20 @@ From the repository root, enter this directory first:
 Set-Location "cdc natality"
 ```
 
-Then run annual extraction and cohort preparation:
+Extract each year using its matching layout JSON. From PowerShell, this loop
+runs the nine annual extractions with their configured raw filenames and output
+paths:
 
 ```powershell
-python src/total_extraction.py
-python src/prepare_analysis_data.py
+foreach ($year in 2016..2024) {
+    python src/total_extraction.py --year $year
+    if ($LASTEXITCODE -ne 0) { break }
+}
 ```
+
+After code harmonization and extraction checks are complete, combine the nine
+annual files and prepare the pooled analysis cohort using the commands in
+[`docs/multi_year_data_pipeline.md`](docs/multi_year_data_pipeline.md).
 
 For an experiment, pass the prepared singleton cohort using `--input` and set
 the required split count and seed. A matching run also requires an

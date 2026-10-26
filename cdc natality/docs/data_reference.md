@@ -1,25 +1,28 @@
-# Data Reference: 2024 Natality
+# Data Reference: CDC Natality, 2016-2024
 
 ## Source and local files
 
-- Dataset: 2024 CDC/NCHS Natality Public Use File, U.S. data.
-- Source: [User Guide to the 2024 Natality Public Use File](https://ftp.cdc.gov/pub/Health_Statistics/NCHS/Dataset_Documentation/DVS/natality/UserGuide2024.pdf).
-- Download date: 2026-10-20.
-- Raw fixed-width file: `Nat2024PublicUS.c20250512.r20250708.txt`, stored under
-  `data/raw/2024/` and excluded from Git.
-- The raw file contains 3,638,436 records. Every inspected record was 1,345
-  characters; the User Guide lists 1,330 characters. The file was not edited.
-- Initial raw-file inspection is documented in `src/inspect_natality.py`.
+- Dataset: CDC/NCHS Natality Public Use Files, 2016-2024, U.S. data.
+- The official annual User Guides are listed in the [CDC Natality documentation
+  directory](https://ftp.cdc.gov/pub/Health_Statistics/NCHS/Dataset_Documentation/DVS/natality/).
+- Nine raw fixed-width files are stored under `data/raw/<year>/` and excluded
+  from Git. Their exact names and guide links are recorded in the annual layout
+  JSON files.
+- The CDC guides specify 1,330-character records. The first local record read
+  from each of the nine files is 1,345 characters. Full-file extraction checks
+  every record against the configured local length; that complete check has not
+  yet been run for all years.
 
 ## Record and extraction conventions
 
-- Positions below are 1-based and inclusive, following the User Guide.
+- Positions below describe the current 2024 file and are 1-based and inclusive.
 - `src/total_extraction.py` extracts fields with a year-specific layout JSON.
-  The verified 2024 layout is in `config/natality_layouts/2024.json`; the
-  resulting file is `data/processed/2024/extracted_natality.csv`. The script
+  Each year has a guide-linked layout in `config/natality_layouts/<year>.json`;
+  the resulting file is `data/processed/<year>/extracted_natality.csv`. The script
   adds `schema_version`, `birth_year`, and a year-prefixed unique
-  `record_number`. Other years require a layout verified against that year's
-  CDC User Guide before use.
+  `record_number`. The layouts' field positions are reviewed against their
+  annual guides; code harmonization and full-file extraction validation are
+  still required before pooled use.
 - Initial extraction preserves values as strings and does not recode blanks,
   unknown values, or not-stated values, except for any explicit per-year
   `value_maps` documented in a layout.

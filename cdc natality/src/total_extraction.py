@@ -1,8 +1,9 @@
 """Extract a CDC Natality fixed-width file using a verified year layout.
 
 Each layout JSON maps canonical project field names to that year's 1-based,
-inclusive positions in the source record. The 2024 layout is verified; add a
-reviewed layout for another year after checking its CDC User Guide.
+inclusive positions in the source record. Year-specific layouts are stored in
+config/natality_layouts; review value coding and validate every raw record
+before pooling annual extractions.
 """
 
 from __future__ import annotations
