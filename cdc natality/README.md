@@ -33,6 +33,11 @@ New pooled-year matching runs and their LLM weight records are written to
 `results/matching results_2016-2024/`. Earlier 2024-only experiment results in
 `results/matching results/` are retained as historical outputs.
 
+The streamed entropy-balancing ATT sensitivity check is documented in
+[`docs/entropy_balancing_protocol.md`](docs/entropy_balancing_protocol.md).
+Its implementation is `src/run_entropy_balancing_validation.py`; results are
+written under `results/entropy-balancing/`.
+
 The shared LLM workflow and its current Natality implementation notes are in
 the repository-level [`docs/llm_matching/`](../docs/llm_matching/protocol_LLM_matching.md).
 
