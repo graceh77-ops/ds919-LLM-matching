@@ -2,8 +2,17 @@
 
 This folder prepares the ACIC 2016 semi-synthetic benchmark for a separate
 evaluation of the project's matching methods. The data setup is complete;
-ACIC-specific preprocessing, matching, and evaluation code have not yet been
-implemented.
+an initial replication loader is available, while matching and evaluation code
+are still to be implemented.
+
+The planned evaluation is summarized in the
+[analysis protocol](docs/analysis_protocol.md).
+
+To inspect one replication from the repository root:
+
+```powershell
+python acic2016/src/load_acic_replication.py --setting 1 --replication zymu_13.csv
+```
 
 ## Data layout
 
