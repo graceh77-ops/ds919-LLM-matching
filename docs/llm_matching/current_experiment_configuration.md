@@ -13,6 +13,7 @@ weight elicitation. The scope is the CDC Natality singleton cohort described in 
 
 | Component | Current configuration |
 |---|---|
+| Default experiment input | `cdc natality/data/processed/pooled_2016_2024/analysis_cohort_singletons.csv`; the file will exist after annual extraction, combination, and cohort preparation |
 | Eligible cohort | 2016-2024 singleton births (`DPLURAL = 1`) with known smoking treatment, valid birth weight, flag-aware complete cases on the ten Natality covariates, and a valid birth year; only the 2024 layout is currently verified |
 | Treatment | `CIG_REC = Y` versus `CIG_REC = N` |
 | Outcome | Birth weight, grams (`DBWT`) |
@@ -98,8 +99,8 @@ pilot outputs, not study estimates. Detailed rows, method summary, and the
 `pca_validation_20261023_summary.csv`, and
 `pca_validation_20261023_feature_map.csv`.
 
-By default, each experiment run writes to a new dated folder under
-`cdc natality/results/matching results/`, named `{repeats}-split YYYYMMDD` (for example,
+New pooled-year experiment runs write to a new dated folder under
+`cdc natality/results/matching results_2016-2024/`, named `{repeats}-split YYYYMMDD` (for example,
 `20-split 20261024`). The folder contains `complete_information.csv` (one row
 per method and split), `summary.csv` (aggregated by method), and
 `complete_information_feature_map.csv`. A numbered suffix is added if the

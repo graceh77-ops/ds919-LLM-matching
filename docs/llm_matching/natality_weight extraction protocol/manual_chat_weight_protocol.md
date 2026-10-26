@@ -25,9 +25,9 @@ specifies the elicitation procedure; the prompt itself is kept separately in
    value. Do not alter individual scores manually.
 5. From the repository root, run `Set-Location "cdc natality"`. Save the
    validated scores in
-   `results/matching results/manual_chat_weights_2016_2024.json`. Save the
+   `results/matching results_2016-2024/manual_chat_weights_2016_2024.json`. Save the
    elicitation record in
-   `results/matching results/manual_chat_weight_record_2016_2024.md`.
+   `results/matching results_2016-2024/manual_chat_weight_record_2016_2024.md`.
 6. Freeze the new weights before running any matching evaluation. Do not revise
    them using pilot or test ATT, reference error, SMD, or comparator results.
 

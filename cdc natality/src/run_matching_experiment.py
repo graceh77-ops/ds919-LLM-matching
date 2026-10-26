@@ -29,8 +29,14 @@ from matching_distance import (
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_INPUT = PROJECT_ROOT / "data" / "processed" / "2024" / "analysis_cohort_singletons.csv"
-DEFAULT_RESULTS_ROOT = PROJECT_ROOT / "results" / "matching results"
+DEFAULT_INPUT = (
+    PROJECT_ROOT
+    / "data"
+    / "processed"
+    / "pooled_2016_2024"
+    / "analysis_cohort_singletons.csv"
+)
+DEFAULT_RESULTS_ROOT = PROJECT_ROOT / "results" / "matching results_2016-2024"
 DEFAULT_WEIGHTS_JSON = None
 DEFAULT_TEST_FRACTION = 0.01
 PCA_CUMULATIVE_VARIANCE_THRESHOLD = 0.90

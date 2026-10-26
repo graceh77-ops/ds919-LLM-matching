@@ -106,8 +106,8 @@ Apply the same covariate-weighting task and Natality design in three stages:
 
 1. **Manual chat-interface matching:** obtain covariate priorities in a new,
    isolated session using the
-   [outcome-blind manual-chat protocol](weight%20extraction%20protocol/manual_chat_weight_protocol.md)
-   and [standalone prompt](weight%20extraction%20protocol/llm_prompt_covariate_weights.md).
+   [outcome-blind manual-chat protocol](natality_weight%20extraction%20protocol/manual_chat_weight_protocol.md)
+   and [standalone prompt](natality_weight%20extraction%20protocol/llm_prompt_covariate_weights.md).
    Preserve the recorded weights as a separate method input for comparison.
 2. **DeepSeek API:** apply the same weighting task through the separate
    implementation in [`cdc natality/src/get_deepseek_weights.py`](../../cdc%20natality/src/get_deepseek_weights.py).
@@ -206,6 +206,6 @@ the final method comparison. Preserve enough outputs to reproduce each
 method's estimate and diagnostic for each split. By default, each run's
 detailed results, method summary, and encoded-column feature map are saved in
 a new dated `{repeats}-split YYYYMMDD` folder under
-`cdc natality/results/matching results/`;
+`cdc natality/results/matching results_2016-2024/`;
 see the [current experiment configuration](current_experiment_configuration.md)
 for the file naming convention and recorded runs.

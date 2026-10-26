@@ -20,10 +20,10 @@ PROMPT_PATH = (
     ROOT
     / "docs"
     / "llm_matching"
-    / "weight extraction protocol"
+    / "natality_weight extraction protocol"
     / "llm_prompt_covariate_weights.md"
 )
-OUTPUT_ROOT = ROOT / "results" / "matching results" / "deepseek_api"
+OUTPUT_ROOT = ROOT / "results" / "matching results_2016-2024" / "deepseek_api"
 API_URL = "https://api.deepseek.com/chat/completions"
 EXPECTED_KEYS = {
     "MAGER",

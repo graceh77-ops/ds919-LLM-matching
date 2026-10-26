@@ -12,6 +12,12 @@ positions, code definitions, or reporting flags.
 
 ## Shared extraction schema
 
+Download each annual Natality public-use file and its matching User Guide from
+[CDC Vital Statistics Online](https://www.cdc.gov/NCHS/data_access/VitalStatsOnline.htm)
+and the [CDC Natality documentation directory](https://ftp.cdc.gov/pub/Health_Statistics/NCHS/Dataset_Documentation/DVS/natality/).
+Place the unmodified annual files under `data/raw/<year>/`. Keep downloaded
+archives and extracted fixed-width source files out of Git.
+
 Each annual extraction contains:
 
 - `schema_version`: currently `natality_core_v1`;
@@ -51,34 +57,40 @@ corresponding eligibility check.
 Run the following commands from the `cdc natality/` application directory. If
 the terminal is at the repository root, first run `Set-Location "cdc natality"`.
 
-1. Extract each year using its verified layout. For example, after creating
-   and reviewing the 2023 layout:
+1. Extract each year using its verified layout. Repeat this for every year
+   from 2016 through 2024 after creating and reviewing that year's layout:
 
    ```powershell
-   python src/total_extraction.py --year 2023 `
-     --layout config/natality_layouts/2023.json `
-     --input data/raw/2023/<official-file-name>.txt `
-     --output data/processed/2023/extracted_natality.csv
+   python src/total_extraction.py --year 2016 `
+     --layout config/natality_layouts/2016.json `
+     --input data/raw/2016/<official-file-name>.txt `
+     --output data/processed/2016/extracted_natality.csv
    ```
 
    The 2024 defaults still point to the existing 2024 file and output path.
 
-2. Combine the annual extractions. The combiner checks identical column
+2. Combine the nine annual extractions. The combiner checks identical column
    schemas and distinct year labels:
 
    ```powershell
    python src/combine_natality_years.py `
-     --inputs data/processed/2022/extracted_natality.csv `
+     --inputs data/processed/2016/extracted_natality.csv `
+             data/processed/2017/extracted_natality.csv `
+             data/processed/2018/extracted_natality.csv `
+             data/processed/2019/extracted_natality.csv `
+             data/processed/2020/extracted_natality.csv `
+             data/processed/2021/extracted_natality.csv `
+             data/processed/2022/extracted_natality.csv `
              data/processed/2023/extracted_natality.csv `
              data/processed/2024/extracted_natality.csv `
-     --output data/processed/pooled_2022_2024/extracted_natality.csv
+     --output data/processed/pooled_2016_2024/extracted_natality.csv
    ```
 
 3. Prepare the pooled analysis cohort and year-by-treatment QC summary:
 
    ```powershell
    python src/prepare_analysis_data.py `
-     --input data/processed/pooled_2022_2024/extracted_natality.csv
+     --input data/processed/pooled_2016_2024/extracted_natality.csv
    ```
 
    The singleton and all-births analysis files are written beside the input;
@@ -107,3 +119,8 @@ all annual inputs are extracted and checked. Historical ten-field/23-column
 results remain archived and are not directly comparable to the new
 eleven-field/31-column design. Raw and processed datasets are local inputs and
 must not be committed to Git.
+
+New pooled-year matching runs and their new DeepSeek weight elicitation
+records are saved under `results/matching results_2016-2024/`. Existing
+2024-only files under `results/matching results/` remain historical and are
+left in place.
