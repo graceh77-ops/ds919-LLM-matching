@@ -80,7 +80,8 @@ def main():
     excluded_both = 0
     dbwt_9999_count = 0
     invalid_dbwt_count = 0
-    valid_birthweights = []
+    min_birthweight = None
+    max_birthweight = None
     eligible_singletons = 0
     excluded_non_singleton = 0
     complete_case_rows = 0
@@ -194,14 +195,18 @@ def main():
                         writer.writerow(row)
 
                 included_treatment_values[treatment] += 1
-                valid_birthweights.append(birthweight)
+                min_birthweight = (
+                    birthweight if min_birthweight is None
+                    else min(min_birthweight, birthweight)
+                )
+                max_birthweight = (
+                    birthweight if max_birthweight is None
+                    else max(max_birthweight, birthweight)
+                )
 
     included_rows = sum(included_treatment_values.values())
 
-    if valid_birthweights:
-        min_birthweight = min(valid_birthweights)
-        max_birthweight = max(valid_birthweights)
-    else:
+    if min_birthweight is None:
         min_birthweight = "N/A"
         max_birthweight = "N/A"
 

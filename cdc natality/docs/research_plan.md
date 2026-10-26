@@ -8,8 +8,9 @@ when estimating the effect of maternal smoking during pregnancy on birth weight?
 - Source: CDC Natality public-use data
 - Target years: 2016-2024. All nine raw public-use files are present and each
   year has a guide-reviewed layout JSON. Shared analysis codes have been
-  reviewed; all nine annual extractions are complete (33,589,282 records).
-  Pooling and cohort preparation remain. `F_PWGT` is retained for audit but is
+  reviewed; all nine annual extractions are complete (33,589,282 records), and
+  the pooled singleton cohort contains 30,924,495 births. `F_PWGT` is retained
+  for audit but is
   not an eligibility requirement because the analysis uses `BMI_R`, not
   pre-pregnancy weight.
 - Unit of observation: one live-birth record
@@ -56,5 +57,5 @@ when estimating the effect of maternal smoking during pregnancy on birth weight?
   [`protocal_maternal_smoking_dataset.md`](protocal_maternal_smoking_dataset.md).
 - Annual layouts and shared code definitions for 2016-2024 have been reviewed.
   Annual extraction completed with fixed-width validation for all source
-  records; pooling and cohort preparation remain. Historical 2024 results use
-  the prior ten-field design.
+  records; pooling and cohort preparation are complete. Historical 2024
+  results use the prior ten-field design.

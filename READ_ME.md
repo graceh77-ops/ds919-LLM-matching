@@ -34,8 +34,9 @@ nine years are present, and each year has a CDC User Guide-reviewed layout
 JSON. All nine annual extractions have completed, yielding 33,589,282 records;
 each record passed the configured fixed-width length check. `F_PWGT` is
 retained for audit but is not an eligibility requirement because the analysis
-uses the `BMI_R` recode. The files still need to be combined and the pooled
-cohort prepared. The application is not a general-purpose
+uses the `BMI_R` recode. The annual files have been combined and the pooled
+singleton analysis cohort contains 30,924,495 births (1,590,168 exposed and
+29,334,327 unexposed). The application is not a general-purpose
 importer or matching engine for arbitrary datasets.
 
 Start with:

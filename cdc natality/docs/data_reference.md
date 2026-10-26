@@ -25,7 +25,7 @@
   annual guides; shared analysis codes have been reviewed. `F_PWGT` is retained
   for audit but is not required for eligibility because the selected field is
   `BMI_R`, not pre-pregnancy weight (`PWgt_R`). The annual files share the same
-  43-column header; combining and preparing the pooled cohort remain.
+  43-column header; they have been combined and the analysis cohorts prepared.
 - Initial extraction preserves values as strings and does not recode blanks,
   unknown values, or not-stated values, except for any explicit per-year
   `value_maps` documented in a layout.

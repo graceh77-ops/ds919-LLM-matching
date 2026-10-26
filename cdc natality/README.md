@@ -14,7 +14,8 @@ the corresponding CDC User Guide. Shared code meanings are documented.
 `F_PWGT` is retained for audit but is not an eligibility requirement because
 the analysis uses `BMI_R`. All nine annual extractions are complete
 (33,589,282 records); every source record passed the configured record-length
-check. Combining the extracts and preparing the pooled cohort remain. Existing experiment outputs use the earlier
+check. The pooled singleton analysis cohort contains 30,924,495 births
+(1,590,168 exposed and 29,334,327 unexposed). Existing experiment outputs use the earlier
 2024-only, ten-field design and are historical. The current AIPW and matching
 models are Natality-specific and do not automatically generalize to a
 different dataset.
@@ -55,8 +56,10 @@ foreach ($year in 2016..2024) {
 }
 ```
 
-The nine extracted files have matching 43-column headers. Combine them and prepare the pooled analysis
-cohort using the commands in
+The nine extracted files have matching 43-column headers. They have been
+combined and the singleton/all-births cohorts prepared. The current QC report is
+[`results/full_data_qc_summary_pooled_2016_2024.md`](results/full_data_qc_summary_pooled_2016_2024.md).
+To repeat the workflow, use the commands in
 [`docs/multi_year_data_pipeline.md`](docs/multi_year_data_pipeline.md).
 
 For an experiment, pass the prepared singleton cohort using `--input` and set

@@ -12,7 +12,9 @@ year-specific value maps are currently indicated. `F_PWGT` is retained for
 audit but is not an eligibility requirement because the selected covariate is
 `BMI_R`, not `PWgt_R`. All nine annual extractions completed: 33,589,282 raw
 records passed the configured fixed-width length check and produced matching
-43-column headers. Combining the files and preparing the pooled cohort remain.
+43-column headers. The nine annual files are combined, and cohort preparation
+retained 30,924,495 singleton births (1,590,168 exposed; 29,334,327 unexposed).
+The all-births sensitivity cohort contains 31,958,803 records.
 Year-agnostic means the analysis code can consume the
 shared schema; it does not mean annual source files have the same field
 positions, code definitions, or reporting flags.
@@ -170,8 +172,8 @@ results and consider year-specific ATT summaries as a secondary description.
 The code schema now supports years 2016-2024. Nine annual layout JSON files
 have been prepared and their field positions reviewed against their
 year-specific guides. Common analysis codes have been reviewed and require no
-year-specific value maps. Annual extraction is complete; combine the annual
-files and prepare the pooled cohort before pooled estimates can be produced.
+year-specific value maps. Annual extraction, pooling, and cohort preparation
+are complete. The pooled singleton cohort has 30,924,495 records. Historical ten-field/23-column
 Historical ten-field/23-column
 results remain archived and are not directly comparable to the new
 eleven-field/31-column design. Raw and processed datasets are local inputs and
