@@ -17,7 +17,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 PROMPT_PATH = (
-    ROOT
+    ROOT.parent
     / "docs"
     / "llm_matching"
     / "natality_weight extraction protocol"
