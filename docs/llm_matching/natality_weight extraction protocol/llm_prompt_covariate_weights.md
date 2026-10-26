@@ -22,7 +22,7 @@ Assign a relative matching-priority score to each of the eleven fields listed be
 - `RF_PDIAB`: Whether the mother had pre-pregnancy diabetes.
 - `RF_PHYPE`: Whether the mother had pre-pregnancy hypertension.
 - `SEX`: Infant sex.
-- `birth_year`: Calendar year of the birth, from 2016 through 2024. Year may capture secular changes in smoking patterns, population composition, clinical care, and data collection. It is a study-period adjustment variable, not a characteristic caused by an individual mother's smoking.
+- `birth_year`: Calendar year of the birth, from 2016 through 2024.
 
 Return one **integer score from 0 to 10** for each field. A score of 0 means lowest relative priority for matching; 10 means highest relative priority. Scores are relative and do not need to sum to 1.
 
