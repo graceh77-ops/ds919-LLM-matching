@@ -37,6 +37,18 @@ weight elicitation. The scope is the CDC Natality singleton cohort described in 
 Repeated splits draw from the same source cohort. They are within-cohort
 resampling, not independent validation or external replication.
 
+## Preprocessing memory behavior
+
+`fit_natality_transform()` now fits field means, scales, and the 31-column
+sample covariance in 100,000-row batches. It combines batch covariance moments
+with online updates, so it does not allocate the full cohort's encoded matrix.
+The transformation and covariance definitions are unchanged. The input
+DataFrame is still held in memory, and the experiment currently creates
+reference and test subsets from it; this change reduces preprocessing's
+temporary encoded-matrix memory but does not yet make the complete experiment
+out-of-core. The reference propensity and AIPW calculations already process
+their model and diagnostic calculations in batches.
+
 ## Method status
 
 - **AIPW-ATT:** primary pseudo-reference estimator. Its propensity and control

@@ -96,6 +96,44 @@ def normalize_categorical_values(field: str, values: pd.Series) -> pd.Series:
     return _categorical_values(field, values)
 
 
+def _encode_features(
+    data: pd.DataFrame,
+    numeric_means: Mapping[str, float],
+    numeric_scales: Mapping[str, float],
+    categorical_means: Mapping[str, np.ndarray],
+    binary_means: Mapping[str, float],
+) -> np.ndarray:
+    """Encode one batch using already-fitted cohort statistics."""
+    blocks: list[np.ndarray] = []
+
+    for field in FIELD_ORDER:
+        if field in NUMERIC_FIELDS:
+            values = pd.to_numeric(data[field], errors="raise").to_numpy(dtype=np.float64)
+            block = ((values - numeric_means[field]) / numeric_scales[field])[:, None]
+        elif field in CATEGORICAL_FIELDS:
+            levels = CATEGORY_LEVELS[field]
+            values = _categorical_values(field, data[field])
+            level_to_index = {level: index for index, level in enumerate(levels)}
+            indices = values.map(level_to_index)
+            if indices.isna().any():
+                invalid = sorted(values[indices.isna()].dropna().unique().tolist())
+                raise ValueError(f"Unrecognized {field} categories: {invalid}")
+            contrasts = _helmert_contrasts(len(levels)).T
+            block = contrasts[indices.to_numpy(dtype=np.int64)]
+            block = block - categorical_means[field]
+        else:
+            levels = BINARY_LEVELS[field]
+            values = _clean_strings(data[field])
+            if not values.isin(levels).all():
+                invalid = sorted(values[~values.isin(levels)].dropna().unique().tolist())
+                raise ValueError(f"Unrecognized {field} categories: {invalid}")
+            positive = (values == levels[1]).to_numpy(dtype=np.float64)
+            block = (positive - binary_means[field])[:, None]
+        blocks.append(block)
+
+    return np.ascontiguousarray(np.column_stack(blocks), dtype=np.float64)
+
+
 @dataclass(frozen=True)
 class NatalityFeatureTransform:
     """Cohort-fitted feature coding, centering, scaling, and covariance."""
@@ -112,34 +150,13 @@ class NatalityFeatureTransform:
 
     def transform(self, data: pd.DataFrame) -> np.ndarray:
         """Encode rows using this transform's fitted preprocessing values."""
-        blocks: list[np.ndarray] = []
-
-        for field in FIELD_ORDER:
-            if field in NUMERIC_FIELDS:
-                values = pd.to_numeric(data[field], errors="raise").to_numpy(dtype=np.float64)
-                block = ((values - self.numeric_means[field]) / self.numeric_scales[field])[:, None]
-            elif field in CATEGORICAL_FIELDS:
-                levels = CATEGORY_LEVELS[field]
-                values = _categorical_values(field, data[field])
-                level_to_index = {level: index for index, level in enumerate(levels)}
-                indices = values.map(level_to_index)
-                if indices.isna().any():
-                    invalid = sorted(values[indices.isna()].dropna().unique().tolist())
-                    raise ValueError(f"Unrecognized {field} categories: {invalid}")
-                contrasts = _helmert_contrasts(len(levels)).T
-                block = contrasts[indices.to_numpy(dtype=np.int64)]
-                block = block - self.categorical_means[field]
-            else:
-                levels = BINARY_LEVELS[field]
-                values = _clean_strings(data[field])
-                if not values.isin(levels).all():
-                    invalid = sorted(values[~values.isin(levels)].dropna().unique().tolist())
-                    raise ValueError(f"Unrecognized {field} categories: {invalid}")
-                positive = (values == levels[1]).to_numpy(dtype=np.float64)
-                block = (positive - self.binary_means[field])[:, None]
-            blocks.append(block)
-
-        return np.ascontiguousarray(np.column_stack(blocks), dtype=np.float64)
+        return _encode_features(
+            data,
+            self.numeric_means,
+            self.numeric_scales,
+            self.categorical_means,
+            self.binary_means,
+        )
 
     def diagonal_field_weights(self, field_weights: Mapping[str, float] | None = None) -> np.ndarray:
         """Expand eleven field weights over encoded columns in the declared order.
@@ -294,14 +311,24 @@ def estimate_att(
     return float(np.mean(treated_outcomes - control_outcomes[match.control_indices]))
 
 
-def fit_natality_transform(cohort: pd.DataFrame) -> NatalityFeatureTransform:
-    """Fit fixed 31-column encoding and covariance using cohort records."""
+def fit_natality_transform(
+    cohort: pd.DataFrame,
+    chunk_rows: int = 100_000,
+) -> NatalityFeatureTransform:
+    """Fit fixed 31-column encoding and covariance in bounded row batches.
+
+    The input DataFrame remains resident in memory, but temporary encoded
+    arrays are limited to ``chunk_rows`` instead of the full cohort. Cohort
+    moments and covariance are combined with stable online updates.
+    """
     required = set(FIELD_ORDER)
     missing = required - set(cohort.columns)
     if missing:
         raise ValueError(f"Missing required covariate columns: {sorted(missing)}")
     if cohort.empty:
         raise ValueError("The cohort used to fit preprocessing is empty.")
+    if chunk_rows < 1:
+        raise ValueError("chunk_rows must be at least 1.")
 
     numeric_means: dict[str, float] = {}
     numeric_scales: dict[str, float] = {}
@@ -309,52 +336,106 @@ def fit_natality_transform(cohort: pd.DataFrame) -> NatalityFeatureTransform:
     binary_means: dict[str, float] = {}
     field_slices: dict[str, slice] = {}
     feature_names: list[str] = []
-    columns: list[np.ndarray] = []
     offset = 0
 
-    for field in FIELD_ORDER:
-        if field in NUMERIC_FIELDS:
-            values = pd.to_numeric(cohort[field], errors="raise").to_numpy(dtype=np.float64)
-            mean = float(values.mean())
-            scale = float(values.std(ddof=0))
-            if not np.isfinite(scale) or scale <= 0:
-                raise ValueError(f"Fitting-cohort standard deviation is zero for {field}.")
-            numeric_means[field] = mean
-            numeric_scales[field] = scale
-            columns.append(((values - mean) / scale)[:, None])
-            names = [field]
-        elif field in CATEGORICAL_FIELDS:
+    # Pass one: estimate the same cohort means and population scales without
+    # constructing cohort-sized feature columns.
+    numeric_counts = {field: 0 for field in NUMERIC_FIELDS}
+    numeric_running_means = {field: 0.0 for field in NUMERIC_FIELDS}
+    numeric_m2 = {field: 0.0 for field in NUMERIC_FIELDS}
+    category_counts = {
+        field: np.zeros(len(CATEGORY_LEVELS[field]), dtype=np.int64)
+        for field in CATEGORICAL_FIELDS
+    }
+    binary_positive_counts = {field: 0 for field in BINARY_FIELDS}
+
+    for start in range(0, len(cohort), chunk_rows):
+        batch = cohort.iloc[start : start + chunk_rows]
+        batch_count = len(batch)
+        for field in NUMERIC_FIELDS:
+            values = pd.to_numeric(batch[field], errors="raise").to_numpy(dtype=np.float64)
+            batch_mean = float(values.mean())
+            batch_m2 = float(np.square(values - batch_mean).sum())
+            previous_count = numeric_counts[field]
+            combined_count = previous_count + batch_count
+            delta = batch_mean - numeric_running_means[field]
+            numeric_m2[field] += batch_m2 + delta * delta * previous_count * batch_count / combined_count
+            numeric_running_means[field] += delta * batch_count / combined_count
+            numeric_counts[field] = combined_count
+
+        for field in CATEGORICAL_FIELDS:
             levels = CATEGORY_LEVELS[field]
-            values = _categorical_values(field, cohort[field])
+            values = _categorical_values(field, batch[field])
             level_to_index = {level: index for index, level in enumerate(levels)}
             indices = values.map(level_to_index)
             if indices.isna().any():
                 invalid = sorted(values[indices.isna()].dropna().unique().tolist())
                 raise ValueError(f"Unrecognized {field} categories: {invalid}")
-            contrasts = _helmert_contrasts(len(levels)).T
-            block = contrasts[indices.to_numpy(dtype=np.int64)]
-            mean = block.mean(axis=0)
-            categorical_means[field] = mean
-            columns.append(block - mean)
-            names = [f"{field}_helmert_{index + 1}" for index in range(len(levels) - 1)]
-        else:
+            category_counts[field] += np.bincount(
+                indices.to_numpy(dtype=np.int64), minlength=len(levels)
+            )
+
+        for field in BINARY_FIELDS:
             levels = BINARY_LEVELS[field]
-            values = _clean_strings(cohort[field])
+            values = _clean_strings(batch[field])
             if not values.isin(levels).all():
                 invalid = sorted(values[~values.isin(levels)].dropna().unique().tolist())
                 raise ValueError(f"Unrecognized {field} categories: {invalid}")
-            positive = (values == levels[1]).to_numpy(dtype=np.float64)
-            mean = float(positive.mean())
+            binary_positive_counts[field] += int((values == levels[1]).sum())
+
+    for field in FIELD_ORDER:
+        if field in NUMERIC_FIELDS:
+            mean = numeric_running_means[field]
+            scale = float(np.sqrt(numeric_m2[field] / numeric_counts[field]))
+            if not np.isfinite(scale) or scale <= 0:
+                raise ValueError(f"Fitting-cohort standard deviation is zero for {field}.")
+            numeric_means[field] = mean
+            numeric_scales[field] = scale
+            names = [field]
+        elif field in CATEGORICAL_FIELDS:
+            levels = CATEGORY_LEVELS[field]
+            contrasts = _helmert_contrasts(len(levels)).T
+            mean = (category_counts[field] @ contrasts) / len(cohort)
+            categorical_means[field] = mean
+            names = [f"{field}_helmert_{index + 1}" for index in range(len(levels) - 1)]
+        else:
+            levels = BINARY_LEVELS[field]
+            mean = binary_positive_counts[field] / len(cohort)
             binary_means[field] = mean
-            columns.append((positive - mean)[:, None])
             names = [f"{field}_contrast"]
 
         field_slices[field] = slice(offset, offset + len(names))
         feature_names.extend(names)
         offset += len(names)
 
-    encoded = np.ascontiguousarray(np.column_stack(columns), dtype=np.float64)
-    covariance = np.cov(encoded, rowvar=False, ddof=1)
+    # Pass two: merge batch covariance moments. This is equivalent to the
+    # sample covariance but never allocates a cohort-sized 31-column matrix.
+    covariance_count = 0
+    covariance_mean = np.zeros(offset, dtype=np.float64)
+    covariance_m2 = np.zeros((offset, offset), dtype=np.float64)
+    for start in range(0, len(cohort), chunk_rows):
+        batch = cohort.iloc[start : start + chunk_rows]
+        encoded = _encode_features(
+            batch,
+            numeric_means,
+            numeric_scales,
+            categorical_means,
+            binary_means,
+        )
+        batch_count = len(encoded)
+        batch_mean = encoded.mean(axis=0)
+        centered = encoded - batch_mean
+        batch_m2 = centered.T @ centered
+
+        combined_count = covariance_count + batch_count
+        delta = batch_mean - covariance_mean
+        covariance_m2 += batch_m2 + np.outer(delta, delta) * (
+            covariance_count * batch_count / combined_count
+        )
+        covariance_mean += delta * batch_count / combined_count
+        covariance_count = combined_count
+
+    covariance = covariance_m2 / (covariance_count - 1)
     eigenvalues, eigenvectors = np.linalg.eigh(covariance)
     largest = float(eigenvalues[-1])
     if not np.isfinite(largest) or largest <= 0:
