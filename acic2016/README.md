@@ -1,18 +1,35 @@
 # ACIC 2016 Application
 
 This folder prepares the ACIC 2016 semi-synthetic benchmark for a separate
-evaluation of the project's matching methods. The data setup is complete;
-an initial replication loader is available, while matching and evaluation code
-are still to be implemented.
+evaluation of the project's matching methods. The replication loader and
+single-replication runner are available. The runner currently compares
+identity generalized Mahalanobis, propensity score matching, and PCA
+Mahalanobis; optional LLM field weights can be provided as JSON.
 
 The planned evaluation is summarized in the
 [analysis protocol](docs/analysis_protocol.md).
+The ACIC field descriptions and outcome-blind LLM elicitation procedure are in
+the [field dictionary](docs/llm_matching/field_dictionary.md),
+[standalone prompt](docs/llm_matching/weight_prompt.md), and
+[weight protocol](docs/llm_matching/weight_protocol.md).
 
 To inspect one replication from the repository root:
 
 ```powershell
 python acic2016/src/load_acic_replication.py --setting 1 --replication zymu_13.csv
 ```
+
+To run the matching pilot on that replication:
+
+```powershell
+python acic2016/src/run_matching_experiment.py --setting 1 --replication zymu_13.csv
+```
+
+The runner writes method diagnostics, the replication references, and the
+encoded-column feature map to a new timestamped folder under `acic2016/results/`.
+It does not overwrite an existing run. A one-replication pilot is not evidence
+of performance across the benchmark; the full evaluation covers 77 settings
+and 100 replications per setting.
 
 ## Data layout
 

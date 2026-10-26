@@ -1,0 +1,80 @@
+encoded_column,source_field,encoding,level
+x_1,x_1,numeric; original scale,
+x_2_B,x_2,one-hot contrast; A is reference,B
+x_2_C,x_2,one-hot contrast; A is reference,C
+x_2_D,x_2,one-hot contrast; A is reference,D
+x_2_E,x_2,one-hot contrast; A is reference,E
+x_2_F,x_2,one-hot contrast; A is reference,F
+x_3,x_3,numeric; original scale,
+x_4,x_4,numeric; original scale,
+x_5,x_5,numeric; original scale,
+x_6,x_6,numeric; original scale,
+x_7,x_7,numeric; original scale,
+x_8,x_8,numeric; original scale,
+x_9,x_9,numeric; original scale,
+x_10,x_10,numeric; original scale,
+x_11,x_11,numeric; original scale,
+x_12,x_12,numeric; original scale,
+x_13,x_13,numeric; original scale,
+x_14,x_14,numeric; original scale,
+x_15,x_15,numeric; original scale,
+x_16,x_16,numeric; original scale,
+x_17,x_17,numeric; original scale,
+x_18,x_18,numeric; original scale,
+x_19,x_19,numeric; original scale,
+x_20,x_20,numeric; original scale,
+x_21_B,x_21,one-hot contrast; A is reference,B
+x_21_C,x_21,one-hot contrast; A is reference,C
+x_21_D,x_21,one-hot contrast; A is reference,D
+x_21_E,x_21,one-hot contrast; A is reference,E
+x_21_F,x_21,one-hot contrast; A is reference,F
+x_21_G,x_21,one-hot contrast; A is reference,G
+x_21_H,x_21,one-hot contrast; A is reference,H
+x_21_I,x_21,one-hot contrast; A is reference,I
+x_21_J,x_21,one-hot contrast; A is reference,J
+x_21_K,x_21,one-hot contrast; A is reference,K
+x_21_L,x_21,one-hot contrast; A is reference,L
+x_21_M,x_21,one-hot contrast; A is reference,M
+x_21_N,x_21,one-hot contrast; A is reference,N
+x_21_O,x_21,one-hot contrast; A is reference,O
+x_21_P,x_21,one-hot contrast; A is reference,P
+x_22,x_22,numeric; original scale,
+x_23,x_23,numeric; original scale,
+x_24_B,x_24,one-hot contrast; A is reference,B
+x_24_C,x_24,one-hot contrast; A is reference,C
+x_24_D,x_24,one-hot contrast; A is reference,D
+x_24_E,x_24,one-hot contrast; A is reference,E
+x_25,x_25,numeric; original scale,
+x_26,x_26,numeric; original scale,
+x_27,x_27,numeric; original scale,
+x_28,x_28,numeric; original scale,
+x_29,x_29,numeric; original scale,
+x_30,x_30,numeric; original scale,
+x_31,x_31,numeric; original scale,
+x_32,x_32,numeric; original scale,
+x_33,x_33,numeric; original scale,
+x_34,x_34,numeric; original scale,
+x_35,x_35,numeric; original scale,
+x_36,x_36,numeric; original scale,
+x_37,x_37,numeric; original scale,
+x_38,x_38,numeric; original scale,
+x_39,x_39,numeric; original scale,
+x_40,x_40,numeric; original scale,
+x_41,x_41,numeric; original scale,
+x_42,x_42,numeric; original scale,
+x_43,x_43,numeric; original scale,
+x_44,x_44,numeric; original scale,
+x_45,x_45,numeric; original scale,
+x_46,x_46,numeric; original scale,
+x_47,x_47,numeric; original scale,
+x_48,x_48,numeric; original scale,
+x_49,x_49,numeric; original scale,
+x_50,x_50,numeric; original scale,
+x_51,x_51,numeric; original scale,
+x_52,x_52,numeric; original scale,
+x_53,x_53,numeric; original scale,
+x_54,x_54,numeric; original scale,
+x_55,x_55,numeric; original scale,
+x_56,x_56,numeric; original scale,
+x_57,x_57,numeric; original scale,
+x_58,x_58,numeric; original scale,
