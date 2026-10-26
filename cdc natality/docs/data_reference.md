@@ -84,5 +84,5 @@ before a pooled-year analysis.
   matching covariates.
 - The current cohort definitions and QC counts are in
   [`protocal_maternal_smoking_dataset.md`](protocal_maternal_smoking_dataset.md) and
-  [`../../results/full_data_qc_summary.md`](../../results/full_data_qc_summary.md).
+  [`../results/full_data_qc_summary.md`](../results/full_data_qc_summary.md).
 

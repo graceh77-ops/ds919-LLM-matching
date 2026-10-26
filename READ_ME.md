@@ -35,9 +35,9 @@ a general-purpose importer or matching engine for arbitrary datasets.
 
 Start with:
 
-- [Natality analysis protocol](cdc%20natality/docs/maternal_smoking_birthweight/protocal_maternal_smoking_dataset.md)
-- [Natality data reference](cdc%20natality/docs/maternal_smoking_birthweight/data_reference.md)
-- [Multi-year Natality pipeline](cdc%20natality/docs/maternal_smoking_birthweight/multi_year_data_pipeline.md)
+- [Natality analysis protocol](cdc%20natality/docs/protocal_maternal_smoking_dataset.md)
+- [Natality data reference](cdc%20natality/docs/data_reference.md)
+- [Multi-year Natality pipeline](cdc%20natality/docs/multi_year_data_pipeline.md)
 - [Current matching protocol](docs/llm_matching/protocol_LLM_matching.md)
 - [Current experiment configuration](docs/llm_matching/current_experiment_configuration.md)
 

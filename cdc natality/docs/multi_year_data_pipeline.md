@@ -33,7 +33,7 @@ within-file row number is also preserved in `source_record_number`.
 ## Prepare an annual layout
 
 Create `config/natality_layouts/<year>.json` using the structure in
-[`config/natality_layouts/2024.json`](../../config/natality_layouts/2024.json).
+[`config/natality_layouts/2024.json`](../config/natality_layouts/2024.json).
 Verify the file encoding, record length, every 1-based inclusive position,
 variable definitions, code sets, and reporting-flag meanings against that
 year's official User Guide. The `fields` keys are canonical project names;

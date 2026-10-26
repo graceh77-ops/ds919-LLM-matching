@@ -9,7 +9,7 @@ application of the workflow. Its estimator, split, encoding, covariate, and
 matching choices are study-specific. A different dataset needs its own
 protocol and configuration; do not assume these specifications transfer
 without review. Study-specific cohort and variable definitions are maintained
-in the [Natality analysis protocol](../../cdc%20natality/docs/maternal_smoking_birthweight/protocal_maternal_smoking_dataset.md).
+in the [Natality analysis protocol](../../cdc%20natality/docs/protocal_maternal_smoking_dataset.md).
 ACIC 2016 remains a possible future benchmark, outside the current scope.
 
 ## Research question

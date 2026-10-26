@@ -16,7 +16,7 @@ Natality-specific and do not automatically generalize to a different dataset.
 
 - `config/natality_layouts/`: verified year-specific fixed-width layouts.
 - `src/`: Natality extraction, cohort preparation, and matching programs.
-- `docs/maternal_smoking_birthweight/`: cohort, variable, and data protocols.
+- `docs/`: cohort, variable, data, and multi-year protocols.
 - `data/raw/` and `data/processed/`: local inputs and derived data; ignored by
   Git.
 - `results/`: QC summaries and experiment outputs.
