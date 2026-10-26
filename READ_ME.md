@@ -14,6 +14,9 @@ analysis configuration.
 - [CDC Natality application](cdc%20natality/README.md) contains its source
   layouts, extraction and
   analysis code, study documentation, local data folders, and results.
+- [ACIC 2016 application](acic2016/README.md) contains the ACIC benchmark data
+  and its current data-layout notes. Its analysis implementation is still to
+  be developed.
 - `requirements.txt` at the repository root lists the Python dependencies
   used by the current application.
 
@@ -59,3 +62,13 @@ python src/prepare_analysis_data.py
 The extraction command uses the local 2024 raw file by default. Raw and
 processed data are ignored by Git and must remain local; commit code,
 configuration, and documentation only when appropriate.
+
+## ACIC 2016 application
+
+The ACIC application is being prepared as a separate benchmark for the
+matching-method study. The full data archive is stored under
+`acic2016/data/raw/`; its extracted layout has `x.csv` and setup folders 1–77
+directly under `acic2016/data/raw/full_data/`. Each setup folder contains 100
+replication files. ACIC-specific matching code and experiment documentation
+have not yet been added. See the [ACIC application README](acic2016/README.md)
+for the data format, reference estimand, and citation details.
