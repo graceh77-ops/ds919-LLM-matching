@@ -1,0 +1,17 @@
+{
+  "status": "running",
+  "started_at_utc": "2026-10-27T00:22:42.741785+00:00",
+  "expected_replications": 7700,
+  "completed_before_run": 0,
+  "weights_path": "C:\\Users\\grace\\Desktop\\LLM_Matching\\ds919-LLM-matching\\acic2016\\results\\llm_weights\\deepseek_api\\20261026T234904Z\\weights.json",
+  "weights_sha256": "be0bbb0189e0a0ad78ddfa773a8bf36c36910937db49c1b7b36fb0ac00cdeb4a",
+  "data_dir": "C:\\Users\\grace\\Desktop\\LLM_Matching\\ds919-LLM-matching\\acic2016\\data\\raw\\full_data",
+  "settings_n": 77,
+  "replications_per_setting": 100,
+  "methods": [
+    "identity_generalized_mahalanobis",
+    "llm_weighted_generalized_mahalanobis",
+    "pca_mahalanobis",
+    "propensity_score_logit"
+  ]
+}
