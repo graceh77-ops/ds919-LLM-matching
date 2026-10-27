@@ -1,0 +1,33 @@
+matching_column,source_covariate,role,llm_weight_field,llm_diagonal_weight
+propensity_probability,all encoded covariates through test-only propensity model,predicted treatment probability,PROPENSITY_SCORE,1.391304347826087
+residual_MAGER,MAGER,OLS residual of encoded covariate on propensity probability,MAGER,1.0434782608695652
+residual_MRACEHISP_helmert_1,MRACEHISP,OLS residual of encoded covariate on propensity probability,MRACEHISP,0.8695652173913043
+residual_MRACEHISP_helmert_2,MRACEHISP,OLS residual of encoded covariate on propensity probability,MRACEHISP,0.8695652173913043
+residual_MRACEHISP_helmert_3,MRACEHISP,OLS residual of encoded covariate on propensity probability,MRACEHISP,0.8695652173913043
+residual_MRACEHISP_helmert_4,MRACEHISP,OLS residual of encoded covariate on propensity probability,MRACEHISP,0.8695652173913043
+residual_MRACEHISP_helmert_5,MRACEHISP,OLS residual of encoded covariate on propensity probability,MRACEHISP,0.8695652173913043
+residual_MRACEHISP_helmert_6,MRACEHISP,OLS residual of encoded covariate on propensity probability,MRACEHISP,0.8695652173913043
+residual_MEDUC_helmert_1,MEDUC,OLS residual of encoded covariate on propensity probability,MEDUC,1.0434782608695652
+residual_MEDUC_helmert_2,MEDUC,OLS residual of encoded covariate on propensity probability,MEDUC,1.0434782608695652
+residual_MEDUC_helmert_3,MEDUC,OLS residual of encoded covariate on propensity probability,MEDUC,1.0434782608695652
+residual_CIG0_R_helmert_1,CIG0_R,OLS residual of encoded covariate on propensity probability,CIG0_R,1.565217391304348
+residual_CIG0_R_helmert_2,CIG0_R,OLS residual of encoded covariate on propensity probability,CIG0_R,1.565217391304348
+residual_CIG0_R_helmert_3,CIG0_R,OLS residual of encoded covariate on propensity probability,CIG0_R,1.565217391304348
+residual_PRIORLIVE,PRIORLIVE,OLS residual of encoded covariate on propensity probability,PRIORLIVE,1.2173913043478262
+residual_PRIORDEAD,PRIORDEAD,OLS residual of encoded covariate on propensity probability,PRIORDEAD,0.6956521739130435
+residual_BMI_R_helmert_1,BMI_R,OLS residual of encoded covariate on propensity probability,BMI_R,1.2173913043478262
+residual_BMI_R_helmert_2,BMI_R,OLS residual of encoded covariate on propensity probability,BMI_R,1.2173913043478262
+residual_BMI_R_helmert_3,BMI_R,OLS residual of encoded covariate on propensity probability,BMI_R,1.2173913043478262
+residual_BMI_R_helmert_4,BMI_R,OLS residual of encoded covariate on propensity probability,BMI_R,1.2173913043478262
+residual_BMI_R_helmert_5,BMI_R,OLS residual of encoded covariate on propensity probability,BMI_R,1.2173913043478262
+residual_RF_PDIAB_contrast,RF_PDIAB,OLS residual of encoded covariate on propensity probability,RF_PDIAB,0.8695652173913043
+residual_RF_PHYPE_contrast,RF_PHYPE,OLS residual of encoded covariate on propensity probability,RF_PHYPE,0.8695652173913043
+residual_SEX_contrast,SEX,OLS residual of encoded covariate on propensity probability,SEX,0.5217391304347826
+residual_birth_year_helmert_1,birth_year,OLS residual of encoded covariate on propensity probability,birth_year,0.6956521739130435
+residual_birth_year_helmert_2,birth_year,OLS residual of encoded covariate on propensity probability,birth_year,0.6956521739130435
+residual_birth_year_helmert_3,birth_year,OLS residual of encoded covariate on propensity probability,birth_year,0.6956521739130435
+residual_birth_year_helmert_4,birth_year,OLS residual of encoded covariate on propensity probability,birth_year,0.6956521739130435
+residual_birth_year_helmert_5,birth_year,OLS residual of encoded covariate on propensity probability,birth_year,0.6956521739130435
+residual_birth_year_helmert_6,birth_year,OLS residual of encoded covariate on propensity probability,birth_year,0.6956521739130435
+residual_birth_year_helmert_7,birth_year,OLS residual of encoded covariate on propensity probability,birth_year,0.6956521739130435
+residual_birth_year_helmert_8,birth_year,OLS residual of encoded covariate on propensity probability,birth_year,0.6956521739130435

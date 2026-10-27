@@ -1,0 +1,42 @@
+{
+  "methods": [
+    "identity_ps_residual_generalized_mahalanobis",
+    "llm_weighted_ps_residual_generalized_mahalanobis",
+    "pca_ps_residual_mahalanobis"
+  ],
+  "repeats": 1,
+  "base_seed": 20261027,
+  "split_seeds": [
+    883926100
+  ],
+  "test_fraction_within_treatment_by_year_strata": 0.01,
+  "pilot_rows": null,
+  "input": "C:\\Users\\grace\\Desktop\\LLM_Matching\\ds919-LLM-matching\\cdc natality\\data\\processed\\pooled_2016_2024\\analysis_cohort_singletons.csv",
+  "propensity_model": "unpenalized logistic regression using only test-cohort treatment and encoded covariates",
+  "score_coordinate": "predicted propensity probability (not logit)",
+  "residualization": "OLS with intercept: each encoded covariate column regressed on predicted probability in pooled test cohort",
+  "method_definitions": {
+    "identity_ps_residual_generalized_mahalanobis": "identity diagonal V on the full-covariance-whitened probability-plus-residual representation",
+    "llm_weighted_ps_residual_generalized_mahalanobis": "12 LLM scores normalized jointly; propensity probability score maps to its coordinate and each field score repeats over that field's residual columns",
+    "pca_ps_residual_mahalanobis": "standardize the 32-column representation, fit test-only PCA, retain 90% cumulative variance, then ordinary Mahalanobis distance on retained scores"
+  },
+  "covariance_eigenvalue_floor_ratio": 1e-08,
+  "llm_field_weights_raw": {
+    "MAGER": 6.0,
+    "MRACEHISP": 5.0,
+    "MEDUC": 6.0,
+    "CIG0_R": 9.0,
+    "PRIORLIVE": 7.0,
+    "PRIORDEAD": 4.0,
+    "BMI_R": 7.0,
+    "RF_PDIAB": 5.0,
+    "RF_PHYPE": 5.0,
+    "SEX": 3.0,
+    "birth_year": 4.0,
+    "PROPENSITY_SCORE": 8.0
+  },
+  "llm_weight_mapping": "PROPENSITY_SCORE plus eleven covariate scores normalized jointly to mean 1; PROPENSITY_SCORE maps to the probability coordinate and each covariate score repeats over its encoded residual columns",
+  "original_covariate_only_llm_methods": "use the eleven covariate scores renormalized over those covariates; PROPENSITY_SCORE applies only to the PS-residual LLM comparator",
+  "outcome_use": "birth weight used only after match selection to estimate ATT and uncertainty",
+  "split_design": "within-cohort treatment-by-year-stratified reference/test resampling; not independent validation"
+}
