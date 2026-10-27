@@ -18,6 +18,9 @@ caliper:
 The existing methods on the original encoded covariates also run in the same
 experiment, so these variants can be compared with the original identity,
 LLM-weighted, PCA, and propensity-logit methods on identical splits.
+For the original covariate-only LLM methods in this run, the eleven covariate
+scores are renormalized over those fields; `PROPENSITY_SCORE` applies only to
+the PS-residual LLM comparator.
 
 ## Shared probability-score/residual representation
 
@@ -36,13 +39,16 @@ a separate benchmark for comparison error.
 
 ### LLM weight mapping
 
-The LLM prompt supplies a field weight for each of the eleven source fields.
-The project normalizes those scores to mean 1 and repeats each field score
-across that field's encoded residual columns. The derived propensity
-probability coordinate is not an LLM-prompt field, so it receives a fixed
-neutral diagonal weight of 1. The identity comparator uses weight 1 on every
-coordinate. This mapping is recorded in the PS-residual feature map and run
-metadata.
+The LLM prompt supplies scores for the eleven source fields and a twelfth
+score for the derived propensity-probability coordinate. The implementation
+normalizes all twelve scores to mean 1, applies `PROPENSITY_SCORE` to the
+probability coordinate, and repeats each covariate score across that field's
+encoded residual columns. The identity comparator uses weight 1 on every
+coordinate; PCA does not use LLM weights. This mapping is recorded in the
+PS-residual feature map and run metadata. Obtain a fresh elicitation with the
+[PS-residual weight prompt](weight_prompt.md), saved separately using the
+[DeepSeek setup](deepseek_api_setup.md). Earlier eleven-field weights do not
+provide a propensity-score weight and are not accepted for this comparison.
 
 For the two generalized Mahalanobis variants, estimate the full covariance
 matrix of the 32-column representation from the test cohort, floor covariance
@@ -94,7 +100,7 @@ splits are within-cohort resampling, not independent validation.
 ## Run
 
 From the `cdc natality/` directory, provide the same input, base seed, split
-count, test fraction, and eleven-field LLM weight file as the comparison run:
+count, test fraction, and 12-score PS-residual LLM weight file:
 
 ```powershell
 python src/run_matching_experiment.py `
@@ -102,7 +108,7 @@ python src/run_matching_experiment.py `
   --repeats 1 `
   --seed <same-base-seed> `
   --test-fraction 0.01 `
-  --weights-json <path-to-eleven-field-weights.json> `
+  --weights-json <path-to-12-score-ps-residual-weights.json> `
   --include-ps-residual
 ```
 

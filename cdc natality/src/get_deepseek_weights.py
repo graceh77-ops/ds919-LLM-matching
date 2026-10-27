@@ -25,7 +25,7 @@ PROMPT_PATH = (
 )
 OUTPUT_ROOT = ROOT / "results" / "matching results_2016-2024" / "deepseek_api"
 API_URL = "https://api.deepseek.com/chat/completions"
-EXPECTED_KEYS = {
+NATALITY_KEYS = {
     "MAGER",
     "MRACEHISP",
     "MEDUC",
@@ -38,6 +38,7 @@ EXPECTED_KEYS = {
     "SEX",
     "birth_year",
 }
+PS_RESIDUAL_KEYS = NATALITY_KEYS | {"PROPENSITY_SCORE"}
 
 
 def read_standalone_prompt(path: Path) -> str:
@@ -52,13 +53,15 @@ def read_standalone_prompt(path: Path) -> str:
     return prompt
 
 
-def validate_weights(content: str) -> dict[str, int]:
+def validate_weights(content: str, expected_keys: set[str]) -> dict[str, int]:
     try:
         parsed = json.loads(content)
     except json.JSONDecodeError as exc:
         raise ValueError(f"Assistant response is not valid JSON: {exc}") from exc
-    if not isinstance(parsed, dict) or set(parsed) != EXPECTED_KEYS:
-        raise ValueError("Response must be an object with exactly the eleven prespecified keys")
+    if not isinstance(parsed, dict) or set(parsed) != expected_keys:
+        raise ValueError(
+            f"Response must be an object with exactly the {len(expected_keys)} prespecified keys"
+        )
     if any(type(value) is not int or not 0 <= value <= 10 for value in parsed.values()):
         raise ValueError("Every score must be an integer from 0 through 10")
     if not any(parsed.values()):
@@ -98,6 +101,24 @@ def request_completion(api_key: str, prompt: str, model: str, timeout: int) -> d
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--prompt",
+        type=Path,
+        default=PROMPT_PATH,
+        help="Standalone delimited prompt file (defaults to the original Natality prompt).",
+    )
+    parser.add_argument(
+        "--output-root",
+        type=Path,
+        default=OUTPUT_ROOT,
+        help="Directory for a timestamped elicitation record.",
+    )
+    parser.add_argument(
+        "--schema",
+        choices=("natality", "ps-residual"),
+        default="natality",
+        help="Expected JSON keys; select ps-residual for the 12-score comparator prompt.",
+    )
+    parser.add_argument(
         "--model",
         default=os.environ.get("DEEPSEEK_MODEL", "deepseek-flash"),
         help="DeepSeek model name (default: DEEPSEEK_MODEL or deepseek-flash)",
@@ -116,14 +137,14 @@ def main() -> int:
         parser.error("--timeout must be a positive number")
 
     try:
-        prompt = read_standalone_prompt(PROMPT_PATH)
+        prompt = read_standalone_prompt(args.prompt)
         response = request_completion(api_key, prompt, args.model, args.timeout)
     except (OSError, ValueError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
 
     timestamp = datetime.now(timezone.utc)
-    run_dir = OUTPUT_ROOT / timestamp.strftime("%Y%m%dT%H%M%SZ")
+    run_dir = args.output_root / timestamp.strftime("%Y%m%dT%H%M%SZ")
     if run_dir.exists():
         print(f"Output directory already exists; refusing to overwrite: {run_dir}", file=sys.stderr)
         return 1
@@ -140,7 +161,8 @@ def main() -> int:
     content = choices[0]["message"]["content"]
     (run_dir / "raw_model_output.txt").write_text(content + "\n", encoding="utf-8")
     try:
-        weights = validate_weights(content)
+        expected_keys = PS_RESIDUAL_KEYS if args.schema == "ps-residual" else NATALITY_KEYS
+        weights = validate_weights(content, expected_keys)
     except ValueError as exc:
         print(f"Saved raw response, but weight validation failed: {exc}\n{run_dir}", file=sys.stderr)
         return 1
@@ -152,8 +174,10 @@ def main() -> int:
     (run_dir / "record.md").write_text(
         "# DeepSeek API weight elicitation record\n\n"
         f"- Requested at (UTC): {timestamp.isoformat()}\n"
+        f"- Prompt source: `{args.prompt.resolve()}`\n"
         f"- Provider: DeepSeek API\n"
         f"- Requested model: `{args.model}`\n"
+        f"- Weight schema: `{args.schema}` ({len(expected_keys)} fields)\n"
         f"- Returned model: `{response.get('model', 'not reported')}`\n"
         f"- API response ID: `{response.get('id', 'not reported')}`\n"
         f"- API endpoint: `{API_URL}`\n"
@@ -164,7 +188,7 @@ def main() -> int:
         f"- Prompt SHA-256: `{prompt_hash}`\n"
         f"- Finish reason: `{choices[0].get('finish_reason', 'not reported')}`\n"
         f"- Token usage: `{json.dumps(response.get('usage', 'not reported'))}`\n"
-        "- Validation: passed; exactly eleven required integer scores from 0 to 10.\n"
+        f"- Validation: passed; exactly {len(expected_keys)} required integer scores from 0 to 10.\n"
         "- Retries or manual edits: none; this script sends one request and does not edit scores.\n\n"
         "## Exact prompt sent\n\n"
         f"```text\n{prompt}\n```\n\n"

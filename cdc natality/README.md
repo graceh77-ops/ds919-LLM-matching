@@ -45,7 +45,9 @@ Mahalanobis, and PCA Mahalanobis. They are implemented under
 [`docs/ps_residual_matching/protocol.md`](docs/ps_residual_matching/protocol.md).
 Enable them with `--include-ps-residual`; comparison outputs are saved under
 `results/ps_residual_matching/`. All use the same test-only representation
-and split as the other methods.
+and split as the other methods. Obtain a fresh 12-score set, including a
+propensity-score weight, for this representation
+using [`docs/ps_residual_matching/deepseek_api_setup.md`](docs/ps_residual_matching/deepseek_api_setup.md).
 
 The shared LLM workflow and its current Natality implementation notes are in
 the repository-level [`docs/llm_matching/`](../docs/llm_matching/protocol_LLM_matching.md).
@@ -77,12 +79,14 @@ To repeat the workflow, use the commands in
 [`docs/multi_year_data_pipeline.md`](docs/multi_year_data_pipeline.md).
 
 For an experiment, pass the prepared singleton cohort using `--input` and set
-the required split count and seed. A matching run also requires an
-eleven-field weight file via `--weights-json`; use `--no-llm-weights` to run
-conventional comparators before a new outcome-blind weight vector is ready.
-Prior ten-field weight files cannot be used with the pooled-year schema. See
-the experiment configuration and multi-year pipeline documentation before
-running pooled-year comparisons.
+the required split count and seed. Standard pooled-year runs use an
+eleven-field weight file. Runs with `--include-ps-residual` require a fresh
+twelve-score file that also includes `PROPENSITY_SCORE`; see the dedicated
+elicitation instructions above. Use `--no-llm-weights` for conventional
+comparators when no LLM weights are being evaluated. Prior ten-field weight
+files cannot be used with the pooled-year schema. See the experiment
+configuration and multi-year pipeline documentation before running pooled-
+year comparisons.
 
 The experiment runner streams the cohort CSV in batches, retains only each
 split's test rows for matching, and streams reference rows through the AIPW

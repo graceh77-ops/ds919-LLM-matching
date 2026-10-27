@@ -39,6 +39,7 @@ DEFAULT_INPUT = (
 )
 DEFAULT_RESULTS_ROOT = PROJECT_ROOT / "results" / "matching results_2016-2024"
 PS_RESIDUAL_RESULTS_ROOT = PROJECT_ROOT / "results" / "ps_residual_matching"
+PROPENSITY_SCORE_WEIGHT_FIELD = "PROPENSITY_SCORE"
 DEFAULT_WEIGHTS_JSON = None
 DEFAULT_TEST_FRACTION = 0.01
 PCA_CUMULATIVE_VARIANCE_THRESHOLD = 0.90
@@ -937,12 +938,47 @@ def _load_weights(path: Path) -> dict[str, float]:
         weights = json.load(source)
     if not isinstance(weights, dict):
         raise ValueError("The weight JSON must be an object of field names to weights.")
-    if set(weights) != set(FIELD_ORDER):
+    allowed_schemas = (set(FIELD_ORDER), set(FIELD_ORDER) | {PROPENSITY_SCORE_WEIGHT_FIELD})
+    if set(weights) not in allowed_schemas:
         raise ValueError(
-            "Weight keys must exactly match the current eleven-field schema; "
-            "prior ten-field weight files need a new outcome-blind elicitation."
+            "Weight keys must exactly match the eleven Natality covariates, or those "
+            "eleven fields plus PROPENSITY_SCORE for the PS-residual comparison."
         )
     return {str(field): float(weight) for field, weight in weights.items()}
+
+
+def _covariate_field_weights(weights: dict[str, float]) -> dict[str, float]:
+    """Select the eleven original field scores for methods on covariates alone."""
+    return {field: float(weights[field]) for field in FIELD_ORDER}
+
+
+def _ps_residual_diagonal_weights(
+    weights: dict[str, float], transform: Any
+) -> tuple[np.ndarray, dict[str, float]]:
+    """Normalize 12 scores jointly and map them to PS plus residual columns."""
+    if PROPENSITY_SCORE_WEIGHT_FIELD not in weights:
+        raise ValueError(
+            "PS-residual matching requires a fresh 12-score file including "
+            "PROPENSITY_SCORE."
+        )
+    raw_scores = np.asarray(
+        [weights[PROPENSITY_SCORE_WEIGHT_FIELD], *(weights[field] for field in FIELD_ORDER)],
+        dtype=np.float64,
+    )
+    if not np.isfinite(raw_scores).all() or (raw_scores < 0.0).any() or raw_scores.mean() <= 0.0:
+        raise ValueError("All twelve LLM scores must be finite, nonnegative, and not all zero.")
+    normalized_scores = raw_scores / raw_scores.mean()
+    normalized_by_field = {
+        field: float(score)
+        for field, score in zip(
+            (PROPENSITY_SCORE_WEIGHT_FIELD, *FIELD_ORDER), normalized_scores
+        )
+    }
+    diagonal = np.empty(len(transform.feature_names) + 1, dtype=np.float64)
+    diagonal[0] = normalized_by_field[PROPENSITY_SCORE_WEIGHT_FIELD]
+    for field in FIELD_ORDER:
+        diagonal[1 + transform.field_slices[field].start : 1 + transform.field_slices[field].stop] = normalized_by_field[field]
+    return diagonal, normalized_by_field
 
 
 def run_experiment(
@@ -963,8 +999,31 @@ def run_experiment(
         raise ValueError("test_fraction must be between 0 and 1.")
     if pilot_rows is not None and pilot_rows < 2:
         raise ValueError("pilot_rows must be at least 2.")
-    if include_ps_residual and weights is None:
-        raise ValueError("PS-residual comparators require an eleven-field --weights-json file.")
+    if include_ps_residual and (
+        weights is None or PROPENSITY_SCORE_WEIGHT_FIELD not in weights
+    ):
+        raise ValueError(
+            "PS-residual comparators require a fresh twelve-score --weights-json file "
+            "including PROPENSITY_SCORE."
+        )
+    if include_ps_residual and weights is not None:
+        expected_ps_keys = set(FIELD_ORDER) | {PROPENSITY_SCORE_WEIGHT_FIELD}
+        if set(weights) != expected_ps_keys:
+            raise ValueError("PS-residual matching requires exactly twelve LLM scores.")
+        raw_ps_scores = np.asarray(list(weights.values()), dtype=np.float64)
+        if (
+            not np.isfinite(raw_ps_scores).all()
+            or (raw_ps_scores < 0.0).any()
+            or raw_ps_scores.sum() <= 0.0
+        ):
+            raise ValueError(
+                "PS-residual LLM scores must be finite, nonnegative, and not all zero."
+            )
+        if sum(float(weights[field]) for field in FIELD_ORDER) <= 0.0:
+            raise ValueError(
+                "At least one covariate field must have a positive LLM score in addition "
+                "to the propensity-score coordinate."
+            )
     if not input_path.exists():
         raise FileNotFoundError(f"Analysis cohort not found: {input_path}")
     feature_map_path = output_path.with_name(f"{output_path.stem}_feature_map.csv")
@@ -1145,11 +1204,12 @@ def run_experiment(
             ps_residual_identity["test_fraction"] = test_fraction
             result_rows.append(ps_residual_identity)
 
-            # Apply the LLM field weight to each residual column from that
-            # field. The derived propensity coordinate has neutral weight 1.
-            llm_residual_weights = matching_transform.diagonal_field_weights(weights)
-            llm_diagonal_weights = np.concatenate(([1.0], llm_residual_weights))
-            ps_residual_representation *= np.sqrt(llm_diagonal_weights)[None, :]
+            # Apply each LLM field weight to its residual columns and the
+            # separately elicited PS weight to the probability coordinate.
+            ps_llm_diagonal_weights, normalized_ps_llm_weights = (
+                _ps_residual_diagonal_weights(weights, matching_transform)
+            )
+            ps_residual_representation *= np.sqrt(ps_llm_diagonal_weights)[None, :]
             ps_residual_llm = _match_one_method(
                 test,
                 matching_transform,
@@ -1216,7 +1276,9 @@ def run_experiment(
         result_rows.append(pca)
 
         if weights is not None:
-            llm_weights = matching_transform.diagonal_field_weights(weights)
+            llm_weights = matching_transform.diagonal_field_weights(
+                _covariate_field_weights(weights)
+            )
             llm = _match_one_method(
                 test,
                 matching_transform,
@@ -1230,7 +1292,9 @@ def run_experiment(
             llm["test_fraction"] = test_fraction
             result_rows.append(llm)
 
-            sensitivity_weights = matching_transform.column_normalized_field_weights(weights)
+            sensitivity_weights = matching_transform.column_normalized_field_weights(
+                _covariate_field_weights(weights)
+            )
             sensitivity = _match_one_method(
                 test,
                 matching_transform,
@@ -1298,12 +1362,13 @@ def run_experiment(
             "residualization": "OLS with intercept: each encoded covariate column regressed on predicted probability in pooled test cohort",
             "method_definitions": {
                 "identity_ps_residual_generalized_mahalanobis": "identity diagonal V on the full-covariance-whitened probability-plus-residual representation",
-                "llm_weighted_ps_residual_generalized_mahalanobis": "LLM field diagonal V repeated over residual columns; probability coordinate weight is 1",
+                "llm_weighted_ps_residual_generalized_mahalanobis": "12 LLM scores normalized jointly; propensity probability score maps to its coordinate and each field score repeats over that field's residual columns",
                 "pca_ps_residual_mahalanobis": "standardize the 32-column representation, fit test-only PCA, retain 90% cumulative variance, then ordinary Mahalanobis distance on retained scores",
             },
             "covariance_eigenvalue_floor_ratio": 1e-8,
             "llm_field_weights_raw": weights,
-            "llm_weight_mapping": "normalized field weight repeated over each source field's encoded residual columns; derived propensity probability coordinate has fixed weight 1",
+            "llm_weight_mapping": "PROPENSITY_SCORE plus eleven covariate scores normalized jointly to mean 1; PROPENSITY_SCORE maps to the probability coordinate and each covariate score repeats over its encoded residual columns",
+            "original_covariate_only_llm_methods": "use the eleven covariate scores renormalized over those covariates; PROPENSITY_SCORE applies only to the PS-residual LLM comparator",
             "outcome_use": "birth weight used only after match selection to estimate ATT and uncertainty",
             "split_design": "within-cohort treatment-by-year-stratified reference/test resampling; not independent validation",
         }
@@ -1311,14 +1376,18 @@ def run_experiment(
         metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
         print(f"Wrote run metadata to {metadata_path}")
 
-        normalized_residual_weights = matching_transform.diagonal_field_weights(weights)
+        _, normalized_ps_llm_weights = _ps_residual_diagonal_weights(
+            weights, matching_transform
+        )
         ps_residual_feature_map = [
             {
                 "matching_column": "propensity_probability",
                 "source_covariate": "all encoded covariates through test-only propensity model",
                 "role": "predicted treatment probability",
-                "llm_weight_field": "derived propensity coordinate",
-                "llm_diagonal_weight": 1.0,
+                "llm_weight_field": PROPENSITY_SCORE_WEIGHT_FIELD,
+                "llm_diagonal_weight": normalized_ps_llm_weights[
+                    PROPENSITY_SCORE_WEIGHT_FIELD
+                ],
             },
             *[
                 {
@@ -1327,12 +1396,7 @@ def run_experiment(
                     "role": "OLS residual of encoded covariate on propensity probability",
                     "llm_weight_field": field,
                     "llm_diagonal_weight": float(
-                        normalized_residual_weights[
-                            matching_transform.field_slices[field].start
-                            + matching_transform.feature_names[
-                                matching_transform.field_slices[field]
-                            ].index(feature_name)
-                        ]
+                        normalized_ps_llm_weights[field]
                     ),
                 }
                 for field in FIELD_ORDER
@@ -1492,8 +1556,8 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=DEFAULT_WEIGHTS_JSON,
         help=(
-            "JSON object with one nonnegative value for each of the eleven fields. "
-            "Prior ten-field weight files do not match the current schema."
+            "JSON object with eleven covariate scores, or twelve scores including "
+            "PROPENSITY_SCORE for --include-ps-residual."
         ),
     )
     weight_group.add_argument(
@@ -1511,15 +1575,16 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    if not args.no_llm_weights and args.weights_json is None:
-        raise SystemExit(
-            "Provide --weights-json with an outcome-blind eleven-field weight file, "
-            "or pass --no-llm-weights to run only conventional comparators."
-        )
     if args.include_ps_residual and args.weights_json is None:
         raise SystemExit(
             "The PS-residual comparison includes an LLM-weighted method; provide "
-            "--weights-json with an outcome-blind eleven-field weight file."
+            "--weights-json with the outcome-blind twelve-score PS-residual file."
+        )
+    if not args.no_llm_weights and args.weights_json is None:
+        raise SystemExit(
+            "Provide --weights-json with an outcome-blind eleven-field file, or the "
+            "twelve-score PS-residual file when using --include-ps-residual, "
+            "or pass --no-llm-weights to run only conventional comparators."
         )
     if args.output is None and args.summary_output is None:
         run_label = f"{args.repeats}-split {date.today():%Y%m%d}"
@@ -1543,6 +1608,13 @@ def main() -> None:
     weights = None
     if not args.no_llm_weights and args.weights_json is not None:
         weights = _load_weights(args.weights_json)
+    if args.include_ps_residual and (
+        weights is None or PROPENSITY_SCORE_WEIGHT_FIELD not in weights
+    ):
+        raise SystemExit(
+            "--include-ps-residual requires a twelve-score weight file containing "
+            "PROPENSITY_SCORE. Use the PS-residual DeepSeek elicitation."
+        )
     run_experiment(
         input_path=args.input,
         output_path=output_path,

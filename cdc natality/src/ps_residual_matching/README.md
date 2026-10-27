@@ -10,8 +10,9 @@ coefficients, so it cannot access birth weight. It returns the centered
 probability-plus-residual representation, covariance whitening transform,
 and diagnostics. The runner fits the propensity model on test-cohort
 treatment and covariates and uses the shared outcome estimator only after
-match selection. The PS coordinate receives neutral weight 1 in the LLM
-variant; each LLM field weight is repeated over the encoded residual columns
-for that field.
+match selection. The LLM prompt provides a score for the propensity
+probability coordinate and each of the eleven covariate fields. The score for
+each field is repeated over its encoded residual columns; the propensity score
+receives its own elicited weight.
 
 See [`../../docs/ps_residual_matching/protocol.md`](../../docs/ps_residual_matching/protocol.md) for the method specification and run command.
