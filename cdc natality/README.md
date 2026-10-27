@@ -38,6 +38,12 @@ The streamed entropy-balancing ATT sensitivity check is documented in
 Its implementation is `src/run_entropy_balancing_validation.py`; results are
 written under `results/entropy-balancing/`.
 
+The proposed probability-propensity-score plus covariate-residual matching
+method is being organized separately under `docs/ps_residual_matching/`,
+`src/ps_residual_matching/`, and `results/ps_residual_matching/`. Its protocol
+and implementation are not yet finalized; existing matching results remain
+unchanged.
+
 The shared LLM workflow and its current Natality implementation notes are in
 the repository-level [`docs/llm_matching/`](../docs/llm_matching/protocol_LLM_matching.md).
 
