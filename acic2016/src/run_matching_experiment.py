@@ -362,21 +362,21 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        help="Output folder (default: next runN_TIMESTAMP folder in acic2016/results)",
+        help="Output folder (default: next pilot_runN_TIMESTAMP folder in acic2016/results)",
     )
     return parser.parse_args()
 
 
 def _next_run_output_dir(timestamp: str) -> Path:
     """Choose the next numbered run folder without overwriting prior results."""
-    pattern = re.compile(r"^run(\d+)_\d{8}T\d{6}Z$")
+    pattern = re.compile(r"^pilot_run(\d+)_\d{8}T\d{6}Z$")
     existing_numbers = [
         int(match.group(1))
         for path in DEFAULT_RESULTS_DIR.iterdir()
         if path.is_dir() and (match := pattern.fullmatch(path.name))
     ]
     next_number = max(existing_numbers, default=0) + 1
-    return DEFAULT_RESULTS_DIR / f"run{next_number}_{timestamp}"
+    return DEFAULT_RESULTS_DIR / f"pilot_run{next_number}_{timestamp}"
 
 
 def main() -> None:

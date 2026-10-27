@@ -88,6 +88,6 @@ prompt version as the latest run.
 The DeepSeek API elicitation and one LLM-weighted matching pilot are complete.
 Both the initial pilot without LLM weights and the LLM-weighted pilot used
 setting 1, replication `zymu_13.csv`. The LLM-weighted pilot outputs are in
-[`results/run1_20261027T000241Z/`](../../results/run1_20261027T000241Z/);
+[`results/pilot_run2_20261027T000241Z/`](../../results/pilot_run2_20261027T000241Z/);
 the earlier no-LLM pilot is in `results/pilot_run/`. The full 77-setting,
 100-replication evaluation has not been run.

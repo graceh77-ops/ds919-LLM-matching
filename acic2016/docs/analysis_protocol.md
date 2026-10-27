@@ -108,5 +108,5 @@ optional LLM field weights supplied as JSON. The initial one-replication pilot
 without LLM weights is in `results/pilot_run/`. The LLM-weighted pilot used
 setting 1, replication `zymu_13.csv`, and the latest DeepSeek vector at
 `results/llm_weights/deepseek_api/20261026T234904Z/weights.json`; its outputs
-are in [`results/run1_20261027T000241Z/`](../results/run1_20261027T000241Z/).
+are in [`results/pilot_run2_20261027T000241Z/`](../results/pilot_run2_20261027T000241Z/).
 The full 7,700-replication evaluation has not been run.

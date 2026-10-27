@@ -26,11 +26,11 @@ python acic2016/src/run_matching_experiment.py --setting 1 --replication zymu_13
 ```
 
 The runner writes method diagnostics, the replication references, and the
-encoded-column feature map to the next numbered timestamped folder
-(`runN_YYYYMMDDTHHMMSSZ`) under `acic2016/results/`. It does not overwrite an
-existing run. A one-replication pilot is not evidence of performance across
-the benchmark; the full evaluation covers 77 settings and 100 replications per
-setting.
+encoded-column feature map to a new numbered pilot folder
+(`pilot_runN_YYYYMMDDTHHMMSSZ`) under `acic2016/results/`. It does not
+overwrite an existing run. A one-replication pilot is not evidence of
+performance across the benchmark; the full evaluation covers 77 settings and
+100 replications per setting.
 
 ## Data layout
 
