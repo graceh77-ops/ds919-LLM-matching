@@ -75,9 +75,9 @@ Three successful DeepSeek runs are currently retained:
 |---|---|---|
 | `first_trial_20261026T231410Z` | `a811ea2b98202a71527ae2703c7d4e793ec010060e1e8f74b89570e0ca308cf9` | Earlier prompt version |
 | `second_trial_20261026T231852Z` | `a811ea2b98202a71527ae2703c7d4e793ec010060e1e8f74b89570e0ca308cf9` | Separate API call with the same prompt content as the first run |
-| `20261026T234904Z` | `c38f5ea080fdd3c37661b53790f70360b83f7901f1744ebcc564b9edb4825a3d` | Latest prompt version; planned vector for the next pilot |
+| `20261026T234904Z` | `c38f5ea080fdd3c37661b53790f70360b83f7901f1744ebcc564b9edb4825a3d` | Latest prompt version; used in the first LLM-weighted pilot |
 
-The planned pilot vector is
+The pilot used
 `results/llm_weights/deepseek_api/20261026T234904Z/weights.json`. Its exact
 prompt and API metadata are preserved alongside it. The first two runs are
 kept as separate elicitation records and are not silently treated as the same
@@ -85,8 +85,9 @@ prompt version as the latest run.
 
 ## Status
 
-The DeepSeek API elicitation is complete. The LLM-weighted matching pilot has
-not yet been run. The initial ACIC pilot without LLM weights used setting 1,
-replication `zymu_13.csv`; the planned next pilot will use the same replication
-and the latest vector above. The full 77-setting, 100-replication evaluation
-has not been run.
+The DeepSeek API elicitation and one LLM-weighted matching pilot are complete.
+Both the initial pilot without LLM weights and the LLM-weighted pilot used
+setting 1, replication `zymu_13.csv`. The LLM-weighted pilot outputs are in
+[`results/run1_20261027T000241Z/`](../../results/run1_20261027T000241Z/);
+the earlier no-LLM pilot is in `results/pilot_run/`. The full 77-setting,
+100-replication evaluation has not been run.

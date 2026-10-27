@@ -104,9 +104,9 @@ diagnostic; the known SATT comparison remains the primary accuracy measure.
 covariate matrix and feature map, derives observed outcomes, and calculates
 realized and expected SATT. `src/run_matching_experiment.py` implements
 identity generalized Mahalanobis, PSM, and PCA Mahalanobis matching, with
-optional LLM field weights supplied as JSON. An initial one-replication pilot
-ran on setting 1, `zymu_13.csv`, without LLM weights. The latest DeepSeek
-vector is saved at
-`results/llm_weights/deepseek_api/20261026T234904Z/weights.json` and is the
-planned vector for the next pilot. The full 7,700-replication evaluation and
-the LLM-weighted pilot have not been run.
+optional LLM field weights supplied as JSON. The initial one-replication pilot
+without LLM weights is in `results/pilot_run/`. The LLM-weighted pilot used
+setting 1, replication `zymu_13.csv`, and the latest DeepSeek vector at
+`results/llm_weights/deepseek_api/20261026T234904Z/weights.json`; its outputs
+are in [`results/run1_20261027T000241Z/`](../results/run1_20261027T000241Z/).
+The full 7,700-replication evaluation has not been run.
