@@ -38,16 +38,19 @@ The streamed entropy-balancing ATT sensitivity check is documented in
 Its implementation is `src/run_entropy_balancing_validation.py`; results are
 written under `results/entropy-balancing/`.
 
-The probability-propensity-score plus covariate-residual representation has
-three optional comparators: identity Mahalanobis, LLM-weighted generalized
-Mahalanobis, and PCA Mahalanobis. They are implemented under
-`src/ps_residual_matching/` and documented in
-[`docs/ps_residual_matching/protocol.md`](docs/ps_residual_matching/protocol.md).
-Enable them with `--include-ps-residual`; comparison outputs are saved under
-`results/ps_residual_matching/`. All use the same test-only representation
-and split as the other methods. Obtain a fresh 12-score set, including a
-propensity-score weight, for this representation
-using [`docs/ps_residual_matching/deepseek_api_setup.md`](docs/ps_residual_matching/deepseek_api_setup.md).
+The propensity-score-augmented representation keeps the original encoded
+covariates and appends the fitted treatment probability as one additional
+coordinate; it does not use covariate residuals. Its optional comparators are
+identity Mahalanobis, LLM-weighted generalized Mahalanobis, and PCA Mahalanobis.
+They are implemented under `src/ps_augmented_matching/` and documented in
+[`docs/ps_augmented_matching/protocol.md`](docs/ps_augmented_matching/protocol.md).
+Enable them with `--include-ps-covariate`; new outputs are saved under
+`results/ps_augmented_matching/`. All use test-cohort covariates and treatment
+for matching-side fitting. Obtain a fresh 12-score set, including a
+propensity-probability weight, using
+[`docs/ps_augmented_matching/deepseek_api_setup.md`](docs/ps_augmented_matching/deepseek_api_setup.md).
+The old `--include-ps-residual` option remains a command-line alias but runs
+the new augmented-covariate design.
 
 The shared LLM workflow and its current Natality implementation notes are in
 the repository-level [`docs/llm_matching/`](../docs/llm_matching/protocol_LLM_matching.md).
@@ -80,7 +83,7 @@ To repeat the workflow, use the commands in
 
 For an experiment, pass the prepared singleton cohort using `--input` and set
 the required split count and seed. Standard pooled-year runs use an
-eleven-field weight file. Runs with `--include-ps-residual` require a fresh
+eleven-field weight file. Runs with `--include-ps-covariate` require a fresh
 twelve-score file that also includes `PROPENSITY_SCORE`; see the dedicated
 elicitation instructions above. Use `--no-llm-weights` for conventional
 comparators when no LLM weights are being evaluated. Prior ten-field weight

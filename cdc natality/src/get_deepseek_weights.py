@@ -38,7 +38,7 @@ NATALITY_KEYS = {
     "SEX",
     "birth_year",
 }
-PS_RESIDUAL_KEYS = NATALITY_KEYS | {"PROPENSITY_SCORE"}
+PS_AUGMENTED_KEYS = NATALITY_KEYS | {"PROPENSITY_SCORE"}
 
 
 def read_standalone_prompt(path: Path) -> str:
@@ -114,9 +114,12 @@ def main() -> int:
     )
     parser.add_argument(
         "--schema",
-        choices=("natality", "ps-residual"),
+        choices=("natality", "ps-augmented", "ps-residual"),
         default="natality",
-        help="Expected JSON keys; select ps-residual for the 12-score comparator prompt.",
+        help=(
+            "Expected JSON keys; select ps-augmented for the 12-score propensity-"
+            "augmented comparator prompt (ps-residual remains a compatible alias)."
+        ),
     )
     parser.add_argument(
         "--model",
@@ -161,7 +164,11 @@ def main() -> int:
     content = choices[0]["message"]["content"]
     (run_dir / "raw_model_output.txt").write_text(content + "\n", encoding="utf-8")
     try:
-        expected_keys = PS_RESIDUAL_KEYS if args.schema == "ps-residual" else NATALITY_KEYS
+        expected_keys = (
+            PS_AUGMENTED_KEYS
+            if args.schema in {"ps-augmented", "ps-residual"}
+            else NATALITY_KEYS
+        )
         weights = validate_weights(content, expected_keys)
     except ValueError as exc:
         print(f"Saved raw response, but weight validation failed: {exc}\n{run_dir}", file=sys.stderr)

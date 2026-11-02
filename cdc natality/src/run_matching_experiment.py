@@ -26,7 +26,7 @@ from matching_distance import (
     nearest_neighbor_with_replacement,
     normalize_categorical_values,
 )
-from ps_residual_matching.coordinates import build_representation
+from ps_augmented_matching.coordinates import build_representation
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -38,7 +38,7 @@ DEFAULT_INPUT = (
     / "analysis_cohort_singletons.csv"
 )
 DEFAULT_RESULTS_ROOT = PROJECT_ROOT / "results" / "matching results_2016-2024"
-PS_RESIDUAL_RESULTS_ROOT = PROJECT_ROOT / "results" / "ps_residual_matching"
+PS_AUGMENTED_RESULTS_ROOT = PROJECT_ROOT / "results" / "ps_augmented_matching"
 PROPENSITY_SCORE_WEIGHT_FIELD = "PROPENSITY_SCORE"
 DEFAULT_WEIGHTS_JSON = None
 DEFAULT_TEST_FRACTION = 0.01
@@ -942,7 +942,7 @@ def _load_weights(path: Path) -> dict[str, float]:
     if set(weights) not in allowed_schemas:
         raise ValueError(
             "Weight keys must exactly match the eleven Natality covariates, or those "
-            "eleven fields plus PROPENSITY_SCORE for the PS-residual comparison."
+            "eleven fields plus PROPENSITY_SCORE for the PS-augmented comparison."
         )
     return {str(field): float(weight) for field, weight in weights.items()}
 
@@ -952,13 +952,13 @@ def _covariate_field_weights(weights: dict[str, float]) -> dict[str, float]:
     return {field: float(weights[field]) for field in FIELD_ORDER}
 
 
-def _ps_residual_diagonal_weights(
+def _ps_augmented_diagonal_weights(
     weights: dict[str, float], transform: Any
 ) -> tuple[np.ndarray, dict[str, float]]:
-    """Normalize 12 scores jointly and map them to PS plus residual columns."""
+    """Normalize 12 scores jointly and map them to encoded X plus final PS column."""
     if PROPENSITY_SCORE_WEIGHT_FIELD not in weights:
         raise ValueError(
-            "PS-residual matching requires a fresh 12-score file including "
+            "PS-augmented matching requires a fresh 12-score file including "
             "PROPENSITY_SCORE."
         )
     raw_scores = np.asarray(
@@ -975,9 +975,11 @@ def _ps_residual_diagonal_weights(
         )
     }
     diagonal = np.empty(len(transform.feature_names) + 1, dtype=np.float64)
-    diagonal[0] = normalized_by_field[PROPENSITY_SCORE_WEIGHT_FIELD]
     for field in FIELD_ORDER:
-        diagonal[1 + transform.field_slices[field].start : 1 + transform.field_slices[field].stop] = normalized_by_field[field]
+        diagonal[
+            transform.field_slices[field].start : transform.field_slices[field].stop
+        ] = normalized_by_field[field]
+    diagonal[-1] = normalized_by_field[PROPENSITY_SCORE_WEIGHT_FIELD]
     return diagonal, normalized_by_field
 
 
@@ -990,7 +992,7 @@ def run_experiment(
     test_fraction: float = DEFAULT_TEST_FRACTION,
     pilot_rows: int | None = None,
     weights: dict[str, float] | None = None,
-    include_ps_residual: bool = False,
+    include_ps_augmented: bool = False,
     overwrite: bool = False,
 ) -> None:
     if repeats < 1:
@@ -999,17 +1001,17 @@ def run_experiment(
         raise ValueError("test_fraction must be between 0 and 1.")
     if pilot_rows is not None and pilot_rows < 2:
         raise ValueError("pilot_rows must be at least 2.")
-    if include_ps_residual and (
+    if include_ps_augmented and (
         weights is None or PROPENSITY_SCORE_WEIGHT_FIELD not in weights
     ):
         raise ValueError(
-            "PS-residual comparators require a fresh twelve-score --weights-json file "
+            "PS-augmented comparators require a fresh twelve-score --weights-json file "
             "including PROPENSITY_SCORE."
         )
-    if include_ps_residual and weights is not None:
+    if include_ps_augmented and weights is not None:
         expected_ps_keys = set(FIELD_ORDER) | {PROPENSITY_SCORE_WEIGHT_FIELD}
         if set(weights) != expected_ps_keys:
-            raise ValueError("PS-residual matching requires exactly twelve LLM scores.")
+            raise ValueError("PS-augmented matching requires exactly twelve LLM scores.")
         raw_ps_scores = np.asarray(list(weights.values()), dtype=np.float64)
         if (
             not np.isfinite(raw_ps_scores).all()
@@ -1017,7 +1019,7 @@ def run_experiment(
             or raw_ps_scores.sum() <= 0.0
         ):
             raise ValueError(
-                "PS-residual LLM scores must be finite, nonnegative, and not all zero."
+                "PS-augmented LLM scores must be finite, nonnegative, and not all zero."
             )
         if sum(float(weights[field]) for field in FIELD_ORDER) <= 0.0:
             raise ValueError(
@@ -1027,8 +1029,8 @@ def run_experiment(
     if not input_path.exists():
         raise FileNotFoundError(f"Analysis cohort not found: {input_path}")
     feature_map_path = output_path.with_name(f"{output_path.stem}_feature_map.csv")
-    ps_residual_feature_map_path = output_path.with_name(
-        f"{output_path.stem}_ps_residual_feature_map.csv"
+    ps_augmented_feature_map_path = output_path.with_name(
+        f"{output_path.stem}_ps_augmented_feature_map.csv"
     )
     metadata_path = output_path.with_name("run_metadata.json")
     existing_outputs = [
@@ -1037,7 +1039,7 @@ def run_experiment(
             output_path,
             summary_path,
             feature_map_path,
-            *( (ps_residual_feature_map_path, metadata_path) if include_ps_residual else () ),
+            *( (ps_augmented_feature_map_path, metadata_path) if include_ps_augmented else () ),
         )
         if path.exists()
     ]
@@ -1154,102 +1156,102 @@ def run_experiment(
         psm["test_fraction"] = test_fraction
         result_rows.append(psm)
 
-        if include_ps_residual:
+        if include_ps_augmented:
             if weights is None:
                 raise ValueError(
-                    "PS-residual comparison requires --weights-json so the LLM-weighted "
+                    "PS-augmented comparison requires --weights-json so the LLM-weighted "
                     "variant can be compared with identity and PCA on the same representation."
                 )
             test_treatment_mask = (
                 test["treatment_binary"].to_numpy(dtype=np.int8) == 1
             )
-            ps_residual_representation, ps_residual_inverse_root, ps_residual_diagnostics = (
+            ps_augmented_representation, ps_augmented_inverse_root, ps_augmented_diagnostics = (
                 build_representation(
                     test_features,
                     matching_propensity_coefficients,
                 )
             )
-            ps_residual_pca_coordinates, ps_residual_pca_components, ps_residual_pca_variance = (
+            ps_augmented_pca_coordinates, ps_augmented_pca_components, ps_augmented_pca_variance = (
                 _pca_mahalanobis_coordinates(
-                    ps_residual_representation,
+                    ps_augmented_representation,
                     test["treatment_binary"].to_numpy(dtype=np.int8),
                     expected_feature_count=len(matching_transform.feature_names) + 1,
                 )
             )
 
             # Identity-matrix generalized Mahalanobis distance on the
-            # probability-plus-residual representation.
+            # encoded-covariate-plus-probability representation.
             np.matmul(
-                ps_residual_representation,
-                ps_residual_inverse_root,
-                out=ps_residual_representation,
+                ps_augmented_representation,
+                ps_augmented_inverse_root,
+                out=ps_augmented_representation,
             )
-            ps_residual_identity = _match_one_method(
+            ps_augmented_identity = _match_one_method(
                 test,
                 matching_transform,
                 np.ones(len(matching_transform.feature_names), dtype=np.float64),
-                "identity_ps_residual_generalized_mahalanobis",
+                "identity_ps_augmented_generalized_mahalanobis",
                 split_number,
                 test_coordinates=(
-                    ps_residual_representation[test_treatment_mask],
-                    ps_residual_representation[~test_treatment_mask],
+                    ps_augmented_representation[test_treatment_mask],
+                    ps_augmented_representation[~test_treatment_mask],
                 ),
                 test_features=test_features,
-                method_diagnostics=ps_residual_diagnostics,
+                method_diagnostics=ps_augmented_diagnostics,
             )
-            ps_residual_identity = _attach_reference_estimands(
-                ps_residual_identity, reference_estimates
+            ps_augmented_identity = _attach_reference_estimands(
+                ps_augmented_identity, reference_estimates
             )
-            ps_residual_identity["pilot_rows"] = pilot_rows
-            ps_residual_identity["test_fraction"] = test_fraction
-            result_rows.append(ps_residual_identity)
+            ps_augmented_identity["pilot_rows"] = pilot_rows
+            ps_augmented_identity["test_fraction"] = test_fraction
+            result_rows.append(ps_augmented_identity)
 
-            # Apply each LLM field weight to its residual columns and the
-            # separately elicited PS weight to the probability coordinate.
+            # Apply each LLM field weight to its encoded columns and the
+            # separately elicited PS weight to the final probability coordinate.
             ps_llm_diagonal_weights, normalized_ps_llm_weights = (
-                _ps_residual_diagonal_weights(weights, matching_transform)
+                _ps_augmented_diagonal_weights(weights, matching_transform)
             )
-            ps_residual_representation *= np.sqrt(ps_llm_diagonal_weights)[None, :]
-            ps_residual_llm = _match_one_method(
+            ps_augmented_representation *= np.sqrt(ps_llm_diagonal_weights)[None, :]
+            ps_augmented_llm = _match_one_method(
                 test,
                 matching_transform,
                 np.ones(len(matching_transform.feature_names), dtype=np.float64),
-                "llm_weighted_ps_residual_generalized_mahalanobis",
+                "llm_weighted_ps_augmented_generalized_mahalanobis",
                 split_number,
                 test_coordinates=(
-                    ps_residual_representation[test_treatment_mask],
-                    ps_residual_representation[~test_treatment_mask],
+                    ps_augmented_representation[test_treatment_mask],
+                    ps_augmented_representation[~test_treatment_mask],
                 ),
                 test_features=test_features,
-                method_diagnostics=ps_residual_diagnostics,
+                method_diagnostics=ps_augmented_diagnostics,
             )
-            ps_residual_llm = _attach_reference_estimands(
-                ps_residual_llm, reference_estimates
+            ps_augmented_llm = _attach_reference_estimands(
+                ps_augmented_llm, reference_estimates
             )
-            ps_residual_llm["pilot_rows"] = pilot_rows
-            ps_residual_llm["test_fraction"] = test_fraction
-            result_rows.append(ps_residual_llm)
+            ps_augmented_llm["pilot_rows"] = pilot_rows
+            ps_augmented_llm["test_fraction"] = test_fraction
+            result_rows.append(ps_augmented_llm)
 
-            ps_residual_pca = _match_one_method(
+            ps_augmented_pca = _match_one_method(
                 test,
                 matching_transform,
                 np.ones(len(matching_transform.feature_names), dtype=np.float64),
-                "pca_ps_residual_mahalanobis",
+                "pca_ps_augmented_mahalanobis",
                 split_number,
-                test_coordinates=ps_residual_pca_coordinates,
+                test_coordinates=ps_augmented_pca_coordinates,
                 test_features=test_features,
                 method_diagnostics={
-                    **ps_residual_diagnostics,
-                    "pca_components_n": ps_residual_pca_components,
-                    "pca_cumulative_variance": ps_residual_pca_variance,
+                    **ps_augmented_diagnostics,
+                    "pca_components_n": ps_augmented_pca_components,
+                    "pca_cumulative_variance": ps_augmented_pca_variance,
                 },
             )
-            ps_residual_pca = _attach_reference_estimands(
-                ps_residual_pca, reference_estimates
+            ps_augmented_pca = _attach_reference_estimands(
+                ps_augmented_pca, reference_estimates
             )
-            ps_residual_pca["pilot_rows"] = pilot_rows
-            ps_residual_pca["test_fraction"] = test_fraction
-            result_rows.append(ps_residual_pca)
+            ps_augmented_pca["pilot_rows"] = pilot_rows
+            ps_augmented_pca["test_fraction"] = test_fraction
+            result_rows.append(ps_augmented_pca)
 
         pca_coordinates, pca_components_n, pca_retained_variance = (
             _pca_mahalanobis_coordinates(
@@ -1310,19 +1312,18 @@ def run_experiment(
 
         print(f"Completed split {split_number} of {repeats}.")
 
-    if include_ps_residual:
+    if include_ps_augmented:
         optional_diagnostic_columns = (
             "ps_probability_min",
             "ps_probability_max",
             "ps_probability_sd",
-            "ps_residual_covariance_rank",
-            "ps_residual_covariance_dimension",
-            "ps_residual_covariance_min_eigenvalue",
-            "ps_residual_covariance_max_eigenvalue",
-            "ps_residual_covariance_condition_number_before_floor",
-            "ps_residual_covariance_condition_number_after_floor",
-            "ps_residual_covariance_eigenvalues_floored_n",
-            "ps_residual_max_abs_score_correlation",
+            "ps_augmented_covariance_rank",
+            "ps_augmented_covariance_dimension",
+            "ps_augmented_covariance_min_eigenvalue",
+            "ps_augmented_covariance_max_eigenvalue",
+            "ps_augmented_covariance_condition_number_before_floor",
+            "ps_augmented_covariance_condition_number_after_floor",
+            "ps_augmented_covariance_eigenvalues_floored_n",
         )
         for result in result_rows:
             for column in optional_diagnostic_columns:
@@ -1335,7 +1336,7 @@ def run_experiment(
         writer.writerows(result_rows)
     print(f"Wrote matching results to {output_path}")
 
-    if include_ps_residual:
+    if include_ps_augmented:
         if data is None:
             split_seeds = [
                 int(np.random.SeedSequence([seed, split_number]).generate_state(1)[0])
@@ -1347,9 +1348,9 @@ def run_experiment(
             ]
         metadata = {
             "methods": [
-                "identity_ps_residual_generalized_mahalanobis",
-                "llm_weighted_ps_residual_generalized_mahalanobis",
-                "pca_ps_residual_mahalanobis",
+                "identity_ps_augmented_generalized_mahalanobis",
+                "llm_weighted_ps_augmented_generalized_mahalanobis",
+                "pca_ps_augmented_mahalanobis",
             ],
             "repeats": repeats,
             "base_seed": seed,
@@ -1359,16 +1360,16 @@ def run_experiment(
             "input": str(input_path.resolve()),
             "propensity_model": "unpenalized logistic regression using only test-cohort treatment and encoded covariates",
             "score_coordinate": "predicted propensity probability (not logit)",
-            "residualization": "OLS with intercept: each encoded covariate column regressed on predicted probability in pooled test cohort",
+            "representation": "original centered encoded covariate columns followed by centered test-only fitted propensity probability; no residualization",
             "method_definitions": {
-                "identity_ps_residual_generalized_mahalanobis": "identity diagonal V on the full-covariance-whitened probability-plus-residual representation",
-                "llm_weighted_ps_residual_generalized_mahalanobis": "12 LLM scores normalized jointly; propensity probability score maps to its coordinate and each field score repeats over that field's residual columns",
-                "pca_ps_residual_mahalanobis": "standardize the 32-column representation, fit test-only PCA, retain 90% cumulative variance, then ordinary Mahalanobis distance on retained scores",
+                "identity_ps_augmented_generalized_mahalanobis": "identity diagonal V on the full-covariance-whitened encoded-covariate-plus-propensity-probability representation",
+                "llm_weighted_ps_augmented_generalized_mahalanobis": "12 LLM scores normalized jointly; each covariate score maps to that field's encoded columns and the propensity-probability score maps to the final probability coordinate",
+                "pca_ps_augmented_mahalanobis": "standardize the 32-column representation, fit test-only PCA, retain 90% cumulative variance, then ordinary Mahalanobis distance on retained scores",
             },
             "covariance_eigenvalue_floor_ratio": 1e-8,
             "llm_field_weights_raw": weights,
-            "llm_weight_mapping": "PROPENSITY_SCORE plus eleven covariate scores normalized jointly to mean 1; PROPENSITY_SCORE maps to the probability coordinate and each covariate score repeats over its encoded residual columns",
-            "original_covariate_only_llm_methods": "use the eleven covariate scores renormalized over those covariates; PROPENSITY_SCORE applies only to the PS-residual LLM comparator",
+            "llm_weight_mapping": "PROPENSITY_SCORE plus eleven covariate scores normalized jointly to mean 1; each covariate score repeats over that source field's encoded columns and PROPENSITY_SCORE maps to the final probability coordinate",
+            "original_covariate_only_llm_methods": "use the eleven covariate scores renormalized over those covariates; PROPENSITY_SCORE applies only to PS-augmented LLM comparison",
             "outcome_use": "birth weight used only after match selection to estimate ATT and uncertainty",
             "split_design": "within-cohort treatment-by-year-stratified reference/test resampling; not independent validation",
         }
@@ -1376,24 +1377,15 @@ def run_experiment(
         metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
         print(f"Wrote run metadata to {metadata_path}")
 
-        _, normalized_ps_llm_weights = _ps_residual_diagonal_weights(
+        _, normalized_ps_llm_weights = _ps_augmented_diagonal_weights(
             weights, matching_transform
         )
-        ps_residual_feature_map = [
-            {
-                "matching_column": "propensity_probability",
-                "source_covariate": "all encoded covariates through test-only propensity model",
-                "role": "predicted treatment probability",
-                "llm_weight_field": PROPENSITY_SCORE_WEIGHT_FIELD,
-                "llm_diagonal_weight": normalized_ps_llm_weights[
-                    PROPENSITY_SCORE_WEIGHT_FIELD
-                ],
-            },
+        ps_augmented_feature_map = [
             *[
                 {
-                    "matching_column": f"residual_{feature_name}",
+                    "matching_column": feature_name,
                     "source_covariate": field,
-                    "role": "OLS residual of encoded covariate on propensity probability",
+                    "role": "original encoded covariate column",
                     "llm_weight_field": field,
                     "llm_diagonal_weight": float(
                         normalized_ps_llm_weights[field]
@@ -1404,12 +1396,21 @@ def run_experiment(
                     matching_transform.field_slices[field]
                 ]
             ],
+            {
+                "matching_column": "propensity_probability",
+                "source_covariate": "all encoded covariates through test-only propensity model",
+                "role": "predicted treatment probability appended after encoded covariates",
+                "llm_weight_field": PROPENSITY_SCORE_WEIGHT_FIELD,
+                "llm_diagonal_weight": normalized_ps_llm_weights[
+                    PROPENSITY_SCORE_WEIGHT_FIELD
+                ],
+            },
         ]
-        ps_residual_feature_map_path.parent.mkdir(parents=True, exist_ok=True)
-        pd.DataFrame(ps_residual_feature_map).to_csv(
-            ps_residual_feature_map_path, index=False
+        ps_augmented_feature_map_path.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(ps_augmented_feature_map).to_csv(
+            ps_augmented_feature_map_path, index=False
         )
-        print(f"Wrote PS-residual feature map to {ps_residual_feature_map_path}")
+        print(f"Wrote PS-augmented feature map to {ps_augmented_feature_map_path}")
 
     if feature_map_rows is None:
         raise RuntimeError("No matching feature mapping was generated.")
@@ -1455,29 +1456,25 @@ def run_experiment(
         mean_pca_components_n=("pca_components_n", "mean"),
         mean_pca_cumulative_variance=("pca_cumulative_variance", "mean"),
     )
-    if include_ps_residual:
+    if include_ps_augmented:
         ps_diagnostic_aggregations = {
             "mean_ps_probability_min": ("ps_probability_min", "mean"),
             "mean_ps_probability_max": ("ps_probability_max", "mean"),
             "mean_ps_probability_sd": ("ps_probability_sd", "mean"),
-            "mean_ps_residual_covariance_rank": ("ps_residual_covariance_rank", "mean"),
-            "mean_ps_residual_covariance_dimension": ("ps_residual_covariance_dimension", "mean"),
-            "mean_ps_residual_covariance_min_eigenvalue": ("ps_residual_covariance_min_eigenvalue", "mean"),
-            "mean_ps_residual_covariance_max_eigenvalue": ("ps_residual_covariance_max_eigenvalue", "mean"),
-            "mean_ps_residual_covariance_condition_number_before_floor": (
-                "ps_residual_covariance_condition_number_before_floor",
+            "mean_ps_augmented_covariance_rank": ("ps_augmented_covariance_rank", "mean"),
+            "mean_ps_augmented_covariance_dimension": ("ps_augmented_covariance_dimension", "mean"),
+            "mean_ps_augmented_covariance_min_eigenvalue": ("ps_augmented_covariance_min_eigenvalue", "mean"),
+            "mean_ps_augmented_covariance_max_eigenvalue": ("ps_augmented_covariance_max_eigenvalue", "mean"),
+            "mean_ps_augmented_covariance_condition_number_before_floor": (
+                "ps_augmented_covariance_condition_number_before_floor",
                 "mean",
             ),
-            "mean_ps_residual_covariance_condition_number_after_floor": (
-                "ps_residual_covariance_condition_number_after_floor",
+            "mean_ps_augmented_covariance_condition_number_after_floor": (
+                "ps_augmented_covariance_condition_number_after_floor",
                 "mean",
             ),
-            "mean_ps_residual_covariance_eigenvalues_floored_n": (
-                "ps_residual_covariance_eigenvalues_floored_n",
-                "mean",
-            ),
-            "mean_ps_residual_max_abs_score_correlation": (
-                "ps_residual_max_abs_score_correlation",
+            "mean_ps_augmented_covariance_eigenvalues_floored_n": (
+                "ps_augmented_covariance_eigenvalues_floored_n",
                 "mean",
             ),
         }
@@ -1541,13 +1538,16 @@ def parse_args() -> argparse.Namespace:
         help="Optional random subset size for a development pilot; not a study result.",
     )
     parser.add_argument(
+        "--include-ps-covariate",
         "--include-ps-residual",
+        dest="include_ps_augmented",
         action="store_true",
         help=(
-            "Add identity, LLM-weighted, and PCA matching on probability-PS plus "
-            "OLS covariate-residual features (requires --weights-json). "
+            "Add identity, LLM-weighted, and PCA matching on original encoded "
+            "covariates plus a test-only fitted propensity probability; no residualization "
+            "(requires --weights-json). The old --include-ps-residual spelling remains an alias. "
             "When outputs are not specified, save the comparison run under "
-            "results/ps_residual_matching/."
+            "results/ps_augmented_matching/."
         ),
     )
     weight_group = parser.add_mutually_exclusive_group()
@@ -1557,7 +1557,7 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_WEIGHTS_JSON,
         help=(
             "JSON object with eleven covariate scores, or twelve scores including "
-            "PROPENSITY_SCORE for --include-ps-residual."
+            "PROPENSITY_SCORE for --include-ps-covariate."
         ),
     )
     weight_group.add_argument(
@@ -1575,21 +1575,21 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    if args.include_ps_residual and args.weights_json is None:
+    if args.include_ps_augmented and args.weights_json is None:
         raise SystemExit(
-            "The PS-residual comparison includes an LLM-weighted method; provide "
-            "--weights-json with the outcome-blind twelve-score PS-residual file."
+            "The PS-augmented comparison includes an LLM-weighted method; provide "
+            "--weights-json with the outcome-blind twelve-score PS-augmented file."
         )
     if not args.no_llm_weights and args.weights_json is None:
         raise SystemExit(
             "Provide --weights-json with an outcome-blind eleven-field file, or the "
-            "twelve-score PS-residual file when using --include-ps-residual, "
+            "twelve-score PS-augmented file when using --include-ps-covariate, "
             "or pass --no-llm-weights to run only conventional comparators."
         )
     if args.output is None and args.summary_output is None:
         run_label = f"{args.repeats}-split {date.today():%Y%m%d}"
         results_root = (
-            PS_RESIDUAL_RESULTS_ROOT if args.include_ps_residual else DEFAULT_RESULTS_ROOT
+            PS_AUGMENTED_RESULTS_ROOT if args.include_ps_augmented else DEFAULT_RESULTS_ROOT
         )
         output_dir = results_root / run_label
         suffix = 2
@@ -1608,12 +1608,12 @@ def main() -> None:
     weights = None
     if not args.no_llm_weights and args.weights_json is not None:
         weights = _load_weights(args.weights_json)
-    if args.include_ps_residual and (
+    if args.include_ps_augmented and (
         weights is None or PROPENSITY_SCORE_WEIGHT_FIELD not in weights
     ):
         raise SystemExit(
-            "--include-ps-residual requires a twelve-score weight file containing "
-            "PROPENSITY_SCORE. Use the PS-residual DeepSeek elicitation."
+            "--include-ps-covariate requires a twelve-score weight file containing "
+            "PROPENSITY_SCORE. Use the PS-augmented DeepSeek elicitation."
         )
     run_experiment(
         input_path=args.input,
@@ -1624,7 +1624,7 @@ def main() -> None:
         test_fraction=args.test_fraction,
         pilot_rows=args.pilot_rows,
         weights=weights,
-        include_ps_residual=args.include_ps_residual,
+        include_ps_augmented=args.include_ps_augmented,
         overwrite=args.overwrite,
     )
 
