@@ -1,0 +1,14 @@
+{
+  "MAGER": 7,
+  "MRACEHISP": 6,
+  "MEDUC": 7,
+  "CIG0_R": 9,
+  "PRIORLIVE": 6,
+  "PRIORDEAD": 3,
+  "BMI_R": 6,
+  "RF_PDIAB": 4,
+  "RF_PHYPE": 4,
+  "SEX": 1,
+  "birth_year": 5,
+  "PROPENSITY_SCORE": 10
+}
