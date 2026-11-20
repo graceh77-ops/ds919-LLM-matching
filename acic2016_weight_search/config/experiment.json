@@ -1,5 +1,5 @@
 {
-  "data_dir": "../acic2016/data/raw/full_data",
+  "data_dir": "data/raw",
   "data": {
     "settings": "all",
     "replications_per_setting": 100,
@@ -18,17 +18,30 @@
   },
   "pilot": {
     "settings": [1],
-    "replications": [1, 2, 3, 4, 5],
+    "replications": "first:5",
     "purpose": "timing_and_code_check_only"
+  },
+  "experiment": {
+    "settings": "all",
+    "max_sweeps": 5
   },
   "split": {
     "unit": "replication",
     "train_fraction": 0.6,
     "validation_fraction": 0.2,
     "test_fraction": 0.2,
-    "seed": null,
+    "seed": 919,
     "force_training": [
-      {"setting": 1, "replications": [1, 2, 3, 4, 5]}
+      {
+        "setting": 1,
+        "replications": [
+          "zymu_13.csv",
+          "zymu_336720322.csv",
+          "zymu_336720327.csv",
+          "zymu_336720328.csv",
+          "zymu_336720331.csv"
+        ]
+      }
     ]
   },
   "objective": {
@@ -43,6 +56,7 @@
   },
   "outputs": {
     "directory": "results/pilot_runs",
+    "experiment_directory": "results/full_experiment",
     "save_candidate_history": true,
     "save_best_weights": true,
     "save_run_metadata": true

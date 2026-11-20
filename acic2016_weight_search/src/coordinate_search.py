@@ -14,6 +14,7 @@ def coordinate_search(
     max_sweeps: int,
     *,
     start_name: str,
+    on_sweep: Callable[[int, dict[str, float], float], None] | None = None,
 ) -> tuple[dict[str, float], float, list[dict[str, object]]]:
     """Optimize one field at a time, retaining accepted updates between fields.
 
@@ -52,6 +53,8 @@ def coordinate_search(
         "accepted": True,
         "evaluation_seconds": perf_counter() - started,
     }]
+    if on_sweep is not None:
+        on_sweep(0, dict(weights), current_score)
 
     for sweep in range(1, max_sweeps + 1):
         any_update = False
@@ -93,6 +96,9 @@ def coordinate_search(
                 weights[field] = best_weight
                 current_score = best_score
                 any_update = True
+
+        if on_sweep is not None:
+            on_sweep(sweep, dict(weights), current_score)
 
         if not any_update:
             break

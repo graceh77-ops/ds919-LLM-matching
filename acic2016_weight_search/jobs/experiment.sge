@@ -1,0 +1,15 @@
+#!/bin/bash -l
+# Submit from acic2016_weight_search with: qsub jobs/experiment.sge
+# Increase or override the time request after reviewing pilot timings.
+#$ -N acic_weight_search
+#$ -cwd
+#$ -V
+#$ -pe omp 1
+#$ -l h_rt=24:00:00
+#$ -l mem_per_core=8G
+#$ -o logs/experiment.$JOB_ID.out
+#$ -e logs/experiment.$JOB_ID.err
+
+set -euo pipefail
+module load python3
+python src/run_experiment.py "$@"

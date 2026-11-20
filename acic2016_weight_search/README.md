@@ -4,20 +4,22 @@ This folder contains a separate implementation for learning matching weights
 on ACIC 2016 simulation replications. It is isolated from the existing ACIC
 benchmark runner and its results.
 
-The experiment will use the existing ACIC input data at
-`../acic2016/data/raw/full_data/`; raw data will not be copied into this
-folder or committed to Git. The current benchmark code remains unchanged.
+The pilot reads ACIC input data from `data/raw/`. Keep raw data out of Git;
+this folder is ignored. The current benchmark code remains unchanged.
 
 ## Contents
 
 - `config/experiment.json`: pilot defaults and the proposed full split.
 - `docs/experiment_design.md`: concise decisions and evaluation boundaries.
 - `src/coordinate_search.py`: reusable one-coordinate-at-a-time optimizer.
-- `src/run_pilot.py`: configurable ACIC pilot runner.
+- `src/run_pilot.py`: configurable ACIC pilot runner (accepts partial data).
+- `src/run_experiment.py`: replication split, search, validation, refit, and test runner.
 - `jobs/pilot.sge`: SCC batch-job wrapper.
+- `jobs/experiment.sge`: SCC wrapper for the full experiment.
 - `results/` and `logs/`: generated results and scheduler logs.
 
-The pilot defaults to setting 1, replications 1-5, all 58 source fields, both
+The pilot defaults to setting 1, the first five loader-sorted replication files,
+all 58 source fields, both
 identity and LLM starting vectors, and one coordinate-search sweep. These
 replications are development/training data and must not be assigned to the final
 test set.
@@ -27,8 +29,8 @@ starting vectors, candidate multipliers, sweep count, and output path can all be
 overridden from the command line:
 
 ```bash
-python src/run_pilot.py --data-dir ../acic2016/data/raw/full_data \
-  --settings 1 --replications 1-5 --starts both \
+python src/run_pilot.py --data-dir data/raw \
+  --settings 1 --replications first:5 --starts both \
   --multipliers 0.1 0.5 1 2 10 --max-sweeps 1
 ```
 
@@ -38,11 +40,37 @@ For SCC, submit the batch wrapper with the same overrides:
 qsub jobs/pilot.sge
 # Or override selected defaults:
 qsub jobs/pilot.sge --data-dir /path/to/full_data \
-  --settings 1 --replications 1-5 --starts both \
+  --settings 1 --replications first:5 --starts both \
   --multipliers 0.1 0.5 1 2 10 --max-sweeps 1
 ```
 
 This runner accepts the ACIC directory layout. A different dataset format needs
 its own data adapter and a valid reference-effect field; the search algorithm
 itself is reusable.
+
+## Full experiment
+
+The full runner expects all 100 replications for each selected setting under
+`data/raw/`. It creates a seeded 60/20/20 split within each setting, keeping the
+five pilot replications in training. It searches on training replications,
+selects the sweep count on validation, reruns from the chosen start on
+train-plus-validation, then evaluates the frozen weights once on test.
+Test summaries include the original identity and LLM starting weights alongside
+their searched versions, so the search can be compared with its baselines.
+
+From this directory on SCC:
+
+```bash
+qsub jobs/experiment.sge
+```
+
+Defaults are all 77 settings, both identity and LLM starts, seed 919, and up to
+five sweeps. Override them as needed, for example:
+
+```bash
+qsub jobs/experiment.sge --settings 1-10 --starts identity --max-sweeps 2
+```
+
+The full-run time request is a starting value. Use the pilot timing results to
+set a suitable SCC walltime before launching the full run.
 

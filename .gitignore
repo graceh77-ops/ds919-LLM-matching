@@ -1,6 +1,12 @@
 # Individual-level raw and processed data in each dataset application folder
 data/
 
+# Generated weight-search outputs and scheduler logs
+/acic2016_weight_search/results/*
+!/acic2016_weight_search/results/.gitkeep
+/acic2016_weight_search/logs/*
+!/acic2016_weight_search/logs/.gitkeep
+
 # API keys and local settings
 .env
 .env.*

@@ -6,6 +6,7 @@ import argparse
 import csv
 import json
 import math
+import re
 import sys
 import time
 from datetime import datetime, timezone
@@ -41,6 +42,7 @@ DEFAULT_LLM_WEIGHTS = (
 )
 DEFAULT_MULTIPLIERS = (0.1, 0.5, 1.0, 2.0, 10.0)
 DEFAULT_CONFIG = PROJECT_ROOT / "acic2016_weight_search" / "config" / "experiment.json"
+REPLICATION_PATTERN = re.compile(r"^zymu_(\d+)\.csv$")
 
 
 def read_config(path: Path) -> dict:
@@ -76,6 +78,31 @@ def parse_integer_selection(value: str) -> list[int]:
     if not selected or len(selected) != len(set(selected)):
         raise argparse.ArgumentTypeError("Selection must be nonempty and unique")
     return selected
+
+
+def resolve_replication_files(value: str, setting: int, data_dir: Path) -> list[str]:
+    """Resolve explicit numeric IDs or the first N files in loader order."""
+    normalized = value.strip().lower()
+    if normalized.startswith("first:"):
+        count = int(normalized.split(":", 1)[1])
+        setting_dir = Path(data_dir) / str(setting)
+        if not setting_dir.is_dir():
+            raise FileNotFoundError(f"ACIC setting folder not found: {setting_dir}")
+        available = [
+            path.name for path in setting_dir.iterdir()
+            if path.is_file() and REPLICATION_PATTERN.fullmatch(path.name)
+        ]
+        available.sort(
+            key=lambda name: int(REPLICATION_PATTERN.fullmatch(name).group(1))
+        )
+        if count < 1 or count > len(available):
+            raise ValueError(
+                f"Requested first {count} replications for setting {setting}, "
+                f"which has {len(available)} files"
+            )
+        return available[:count]
+    numbers = parse_integer_selection(value)
+    return [f"zymu_{number}.csv" for number in numbers]
 
 
 def load_field_weights(path: Path, fields: Sequence[str]) -> dict[str, float]:
@@ -144,8 +171,11 @@ def parse_args() -> argparse.Namespace:
     search = config.get("search", {})
     output = config.get("outputs", {}).get("directory", "results/pilot_runs")
     settings_default = ",".join(str(value) for value in pilot.get("settings", [1]))
-    replications_default = ",".join(
-        str(value) for value in pilot.get("replications", [1, 2, 3, 4, 5])
+    pilot_replications = pilot.get("replications", "first:5")
+    replications_default = (
+        pilot_replications
+        if isinstance(pilot_replications, str)
+        else ",".join(str(value) for value in pilot_replications)
     )
     initializations = search.get("initializations", ["identity", "llm"])
     starts_default = "both" if set(initializations) == {"identity", "llm"} else initializations[0]
@@ -158,7 +188,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--settings", default=settings_default, help="ACIC settings, e.g. 1 or 1-77")
     parser.add_argument(
         "--replications", default=replications_default,
-        help="Replication numbers per setting, e.g. 1-5 or 1-10,20",
+        help="Use first:N for the first N loader-sorted files, or specify IDs such as 13,336720322",
     )
     parser.add_argument(
         "--field-set", default=search.get("field_set", "all"),
@@ -181,7 +211,6 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     settings = parse_integer_selection(args.settings)
-    replications = parse_integer_selection(args.replications)
     fields_requested = None if args.field_set.lower() == "all" else [
         field.strip() for field in args.field_set.split(",") if field.strip()
     ]
@@ -192,11 +221,16 @@ def main() -> None:
         raise SystemExit("--max-sweeps must be at least 1")
 
     datasets = []
+    replication_files_by_setting = {}
     for setting in settings:
-        for replication_number in replications:
+        replication_files = resolve_replication_files(
+            args.replications, setting, args.data_dir
+        )
+        replication_files_by_setting[str(setting)] = replication_files
+        for replication_file in replication_files:
             datasets.append(load_replication(
                 setting,
-                f"zymu_{replication_number}.csv",
+                replication_file,
                 args.data_dir,
             ))
     if not datasets:
@@ -284,7 +318,7 @@ def main() -> None:
         "config": str(args.config.resolve()),
         "data_dir": str(args.data_dir.resolve()),
         "settings": settings,
-        "replications_per_setting": replications,
+        "replication_files_by_setting": replication_files_by_setting,
         "searched_fields": searched_fields,
         "starts": [name for name, _ in starting_vectors],
         "multipliers": factors,
