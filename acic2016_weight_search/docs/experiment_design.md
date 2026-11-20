@@ -21,10 +21,11 @@ Do not use held-out test outcomes or potential outcomes to make design choices.
 ## Evaluation boundary
 
 The pilot uses its five replications only for search execution and timing; it has
-no validation or test estimate. In the full experiment, training replications
-select weights, validation replications select the sweep count for each
-starting vector, and the search is rerun on training plus validation with that
-fixed count. Evaluate each frozen start on test replications once. Report test
-RMSE overall and by setting, with balance and matching diagnostics. The full
-runner defaults to a five-sweep ceiling; validation may select an earlier stop.
+no validation or test estimate. In the full experiment, all training
+replications select weights and validation replications select a checkpoint
+for each starting vector from sweep 0, 1, or 2. The selected training
+checkpoint is evaluated on test once; there is no train-plus-validation refit.
+Report test RMSE overall and by setting, with balance and matching diagnostics.
+The five multiplier candidates for a covariate are scored in parallel within
+one SCC job; covariate updates and sweeps remain sequential.
 

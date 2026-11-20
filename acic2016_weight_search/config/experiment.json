@@ -1,5 +1,5 @@
 {
-  "data_dir": "data/raw",
+  "data_dir": "data/raw/full_data",
   "data": {
     "settings": "all",
     "replications_per_setting": 100,
@@ -23,7 +23,7 @@
   },
   "experiment": {
     "settings": "all",
-    "max_sweeps": 5
+    "max_sweeps": 2
   },
   "split": {
     "unit": "replication",

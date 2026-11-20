@@ -5,6 +5,10 @@ from __future__ import annotations
 from time import perf_counter
 from typing import Callable, Mapping, Sequence
 
+CandidateBatchScorer = Callable[
+    [Sequence[dict[str, float]]], Sequence[tuple[float, float]]
+]
+
 
 def coordinate_search(
     initial_weights: Mapping[str, float],
@@ -15,6 +19,8 @@ def coordinate_search(
     *,
     start_name: str,
     on_sweep: Callable[[int, dict[str, float], float], None] | None = None,
+    on_coordinate: Callable[[int, str, float], None] | None = None,
+    score_candidates: CandidateBatchScorer | None = None,
 ) -> tuple[dict[str, float], float, list[dict[str, object]]]:
     """Optimize one field at a time, retaining accepted updates between fields.
 
@@ -65,13 +71,33 @@ def coordinate_search(
             best_score = current_score
             candidate_rows: list[dict[str, object]] = []
 
+            candidates: list[dict[str, float]] = []
+            candidate_weights: list[float] = []
             for factor in factors:
                 candidate = dict(weights)
                 candidate_weight = base_weight * factor
                 candidate[field] = candidate_weight
-                evaluation_started = perf_counter()
-                candidate_score = float(score(candidate))
-                evaluation_seconds = perf_counter() - evaluation_started
+                candidates.append(candidate)
+                candidate_weights.append(candidate_weight)
+
+            if score_candidates is None:
+                candidate_results = []
+                for candidate in candidates:
+                    evaluation_started = perf_counter()
+                    candidate_score = float(score(candidate))
+                    candidate_results.append(
+                        (candidate_score, perf_counter() - evaluation_started)
+                    )
+            else:
+                candidate_results = list(score_candidates(candidates))
+                if len(candidate_results) != len(candidates):
+                    raise ValueError("score_candidates returned the wrong number of scores")
+
+            for factor, candidate_weight, (candidate_score, evaluation_seconds) in zip(
+                factors, candidate_weights, candidate_results
+            ):
+                candidate_score = float(candidate_score)
+                evaluation_seconds = float(evaluation_seconds)
                 if candidate_score < 0:
                     raise ValueError("score must be a nonnegative RMSE")
                 candidate_rows.append({
@@ -96,6 +122,8 @@ def coordinate_search(
                 weights[field] = best_weight
                 current_score = best_score
                 any_update = True
+            if on_coordinate is not None:
+                on_coordinate(sweep, field, current_score)
 
         if on_sweep is not None:
             on_sweep(sweep, dict(weights), current_score)

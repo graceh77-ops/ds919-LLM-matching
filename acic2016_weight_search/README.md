@@ -4,8 +4,9 @@ This folder contains a separate implementation for learning matching weights
 on ACIC 2016 simulation replications. It is isolated from the existing ACIC
 benchmark runner and its results.
 
-The pilot reads ACIC input data from `data/raw/`. Keep raw data out of Git;
-this folder is ignored. The current benchmark code remains unchanged.
+The pilot and full runner read ACIC input data from `data/raw/full_data/`.
+Keep raw data out of Git; the `data/` folder is ignored. The current benchmark
+code remains unchanged.
 
 ## Contents
 
@@ -13,7 +14,7 @@ this folder is ignored. The current benchmark code remains unchanged.
 - `docs/experiment_design.md`: concise decisions and evaluation boundaries.
 - `src/coordinate_search.py`: reusable one-coordinate-at-a-time optimizer.
 - `src/run_pilot.py`: configurable ACIC pilot runner (accepts partial data).
-- `src/run_experiment.py`: replication split, search, validation, refit, and test runner.
+- `src/run_experiment.py`: replication split, search, validation selection, and test runner.
 - `jobs/pilot.sge`: SCC batch-job wrapper.
 - `jobs/experiment.sge`: SCC wrapper for the full experiment.
 - `results/` and `logs/`: generated results and scheduler logs.
@@ -29,7 +30,7 @@ starting vectors, candidate multipliers, sweep count, and output path can all be
 overridden from the command line:
 
 ```bash
-python src/run_pilot.py --data-dir data/raw \
+python src/run_pilot.py --data-dir data/raw/full_data \
   --settings 1 --replications first:5 --starts both \
   --multipliers 0.1 0.5 1 2 10 --max-sweeps 1
 ```
@@ -51,12 +52,14 @@ itself is reusable.
 ## Full experiment
 
 The full runner expects all 100 replications for each selected setting under
-`data/raw/`. It creates a seeded 60/20/20 split within each setting, keeping the
-five pilot replications in training. It searches on training replications,
-selects the sweep count on validation, reruns from the chosen start on
-train-plus-validation, then evaluates the frozen weights once on test.
+`data/raw/full_data/`. It creates a seeded 60/20/20 split within each setting, keeping the
+five pilot replications in training. It searches on all training replications,
+selects the best checkpoint (initial, after sweep one, or after sweep two) on
+validation, then evaluates the frozen weights once on test. It does not refit
+on train plus validation.
 Test summaries include the original identity and LLM starting weights alongside
-their searched versions, so the search can be compared with its baselines.
+their searched versions, plus the existing propensity-score logit and PCA
+Mahalanobis baselines, so all methods use the same held-out replications.
 
 From this directory on SCC:
 
@@ -64,13 +67,14 @@ From this directory on SCC:
 qsub jobs/experiment.sge
 ```
 
-Defaults are all 77 settings, both identity and LLM starts, seed 919, and up to
-five sweeps. Override them as needed, for example:
+Defaults are all 77 settings, both identity and LLM starts, seed 919, up to two
+sweeps, and four worker processes to score the five multiplier candidates for
+each covariate in parallel. Override them as needed, for example:
 
 ```bash
 qsub jobs/experiment.sge --settings 1-10 --starts identity --max-sweeps 2
 ```
 
-The full-run time request is a starting value. Use the pilot timing results to
-set a suitable SCC walltime before launching the full run.
+The job script requests four cores and 72 hours. Use a short parallel timing run
+to refine this walltime estimate before the full experiment.
 

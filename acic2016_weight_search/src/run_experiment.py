@@ -6,9 +6,12 @@ import argparse
 import csv
 import json
 import math
+import multiprocessing
+import os
 import re
 import sys
 import time
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,11 +32,14 @@ from run_matching_experiment import (  # noqa: E402
     _balance_metrics,
     _mahalanobis_coordinates,
     _matching_indices,
+    _pca_coordinates,
+    _propensity_logits,
 )
 
 DEFAULT_CONFIG = PROJECT_ROOT / "acic2016_weight_search" / "config" / "experiment.json"
 REPLICATION_PATTERN = re.compile(r"^zymu_(\d+)\.csv$")
 OUTCOME_COLUMNS = ("z", "y0", "y1")
+_CANDIDATE_WORKER_CONTEXT = None
 
 
 @dataclass(frozen=True)
@@ -188,26 +194,19 @@ def field_column_weights(feature_map, encoded_columns, field_weights):
     return expanded
 
 
-def evaluate_weights(
+def evaluate_coordinates(
     outcomes: Sequence[ReplicationOutcome],
     covariates: pd.DataFrame,
-    features: np.ndarray,
-    feature_map,
-    fields: Sequence[str],
-    weights: Mapping[str, float],
+    coordinates_for,
     *,
     diagnostics: bool = False,
+    executor: ThreadPoolExecutor | None = None,
 ) -> tuple[float, list[dict[str, object]]]:
-    columns = list(feature_map["encoded_column"])
-    column_weights = field_column_weights(feature_map, columns, weights)
-    coordinates = _mahalanobis_coordinates(features, column_weights)
-    squared_errors = []
-    records: list[dict[str, object]] = []
-    for item in outcomes:
+    def score_replication(item: ReplicationOutcome) -> dict[str, object]:
+        coordinates = coordinates_for(item)
         treated, controls, distances = _matching_indices(coordinates, item.treatment)
         estimate = float(np.mean(item.observed[treated] - item.observed[controls]))
         error = estimate - item.realized_satt
-        squared_errors.append(error * error)
         record: dict[str, object] = {
             "setting": item.setting,
             "replication": item.filename,
@@ -226,9 +225,55 @@ def evaluate_weights(
                 prefix="after",
             )
             record["max_abs_smd_after"] = balance["max_abs_smd_after"]
-        records.append(record)
-    rmse = math.sqrt(float(np.mean(squared_errors)))
+        return record
+
+    results = (
+        executor.map(score_replication, outcomes)
+        if executor is not None
+        else map(score_replication, outcomes)
+    )
+    records = list(results)
+    rmse = math.sqrt(float(np.mean([row["error"] ** 2 for row in records])))
     return rmse, records
+
+
+def evaluate_weights(
+    outcomes: Sequence[ReplicationOutcome],
+    covariates: pd.DataFrame,
+    features: np.ndarray,
+    feature_map,
+    fields: Sequence[str],
+    weights: Mapping[str, float],
+    *,
+    diagnostics: bool = False,
+    executor: ThreadPoolExecutor | None = None,
+) -> tuple[float, list[dict[str, object]]]:
+    del fields  # Source-field completeness is validated when loading the starts.
+    columns = list(feature_map["encoded_column"])
+    column_weights = field_column_weights(feature_map, columns, weights)
+    coordinates = _mahalanobis_coordinates(features, column_weights)
+    return evaluate_coordinates(
+        outcomes,
+        covariates,
+        lambda _item: coordinates,
+        diagnostics=diagnostics,
+        executor=executor,
+    )
+
+
+def initialize_candidate_worker(train, covariates, features, feature_map, fields) -> None:
+    """Keep read-only score inputs in each worker for candidate-level parallelism."""
+    global _CANDIDATE_WORKER_CONTEXT
+    _CANDIDATE_WORKER_CONTEXT = (train, covariates, features, feature_map, fields)
+
+
+def score_candidate_worker(weights: dict[str, float]) -> tuple[float, float]:
+    started = time.perf_counter()
+    train, covariates, features, feature_map, fields = _CANDIDATE_WORKER_CONTEXT
+    rmse, _ = evaluate_weights(
+        train, covariates, features, feature_map, fields, weights
+    )
+    return rmse, time.perf_counter() - started
 
 
 def load_llm_weights(path: Path, fields: Sequence[str]) -> dict[str, float]:
@@ -277,6 +322,10 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=split_config.get("seed", 919))
     parser.add_argument("--starts", choices=("identity", "llm", "both"), default=starts_default)
     parser.add_argument("--max-sweeps", type=int, default=experiment.get("max_sweeps", 5))
+    parser.add_argument(
+        "--workers", type=int, default=max(1, int(os.environ.get("NSLOTS", "1"))),
+        help="Workers for multiplier candidates (defaults to SCC NSLOTS)",
+    )
     parser.add_argument("--field-set", default=search.get("field_set", "all"))
     parser.add_argument(
         "--multipliers", type=float, nargs="+",
@@ -288,6 +337,8 @@ def main() -> None:
 
     if args.max_sweeps < 1:
         raise SystemExit("--max-sweeps must be at least 1")
+    if args.workers < 1:
+        raise SystemExit("--workers must be at least 1")
     settings = parse_settings(args.settings)
     expected = int(config.get("data", {}).get("replications_per_setting", 100))
     files_by_setting = {
@@ -316,7 +367,6 @@ def main() -> None:
                 by_split[split_name].append(load_outcome(args.data_dir, setting, filename))
     train = by_split["train"]
     validation = by_split["validation"]
-    train_validation = train + validation
 
     starts = []
     if args.starts in {"identity", "both"}:
@@ -332,6 +382,19 @@ def main() -> None:
         output_dir = (Path.cwd() / output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=False)
     write_csv(output_dir / "split_manifest.csv", split_rows)
+    executor = ThreadPoolExecutor(max_workers=args.workers) if args.workers > 1 else None
+    candidate_workers = min(4, args.workers, len(multipliers))
+    candidate_pool = None
+    if candidate_workers > 1:
+        process_context = multiprocessing.get_context(
+            "fork" if os.name == "posix" else "spawn"
+        )
+        candidate_pool = ProcessPoolExecutor(
+            max_workers=candidate_workers,
+            mp_context=process_context,
+            initializer=initialize_candidate_worker,
+            initargs=(train, covariates, features, feature_map, fields),
+        )
 
     history: list[dict[str, object]] = []
     validation_rows: list[dict[str, object]] = []
@@ -345,15 +408,25 @@ def main() -> None:
     for start_name, initial_weights in starts:
         def train_score(candidate: dict[str, float]) -> float:
             return evaluate_weights(
-                train, covariates, features, feature_map, fields, candidate
+                train, covariates, features, feature_map, fields, candidate,
             )[0]
+
+        def score_candidate_batch(candidates: Sequence[dict[str, float]]):
+            if candidate_pool is None:
+                results = []
+                for candidate in candidates:
+                    started = time.perf_counter()
+                    results.append((train_score(candidate), time.perf_counter() - started))
+                return results
+            return list(candidate_pool.map(score_candidate_worker, candidates))
 
         checkpoints: list[tuple[int, dict[str, float], float]] = []
         checkpoint_weights[start_name] = {}
 
         def record_checkpoint(sweep: int, weights: dict[str, float], train_rmse: float) -> None:
             validation_rmse, _ = evaluate_weights(
-                validation, covariates, features, feature_map, fields, weights
+                validation, covariates, features, feature_map, fields, weights,
+                executor=executor,
             )
             checkpoints.append((sweep, dict(weights), validation_rmse))
             checkpoint_weights[start_name][str(sweep)] = dict(weights)
@@ -363,6 +436,18 @@ def main() -> None:
                 "training_rmse": train_rmse,
                 "validation_rmse": validation_rmse,
             })
+            print(
+                f"{start_name}: completed through sweep {sweep}; "
+                f"training RMSE={train_rmse:.6f}, validation RMSE={validation_rmse:.6f}",
+                flush=True,
+            )
+
+        def log_coordinate(sweep: int, field: str, train_rmse: float) -> None:
+            print(
+                f"{start_name}: sweep {sweep}, finished {field}; "
+                f"current training RMSE={train_rmse:.6f}",
+                flush=True,
+            )
 
         started = time.perf_counter()
         _, _, search_history = coordinate_search(
@@ -373,10 +458,12 @@ def main() -> None:
             args.max_sweeps,
             start_name=start_name,
             on_sweep=record_checkpoint,
+            on_coordinate=log_coordinate,
+            score_candidates=score_candidate_batch,
         )
         timings[f"{start_name}_training_search_seconds"] = time.perf_counter() - started
         history.extend(search_history)
-        selected_sweep, _, selected_validation_rmse = min(
+        selected_sweep, selected_weights, selected_validation_rmse = min(
             checkpoints, key=lambda item: (item[2], item[0])
         )
         selection_rows.append({
@@ -385,24 +472,9 @@ def main() -> None:
             "validation_rmse": selected_validation_rmse,
         })
 
-        if selected_sweep == 0:
-            refit_weights = dict(initial_weights)
-        else:
-            def refit_score(candidate: dict[str, float]) -> float:
-                return evaluate_weights(
-                    train_validation, covariates, features, feature_map, fields, candidate
-                )[0]
-
-            refit_weights, _, refit_history = coordinate_search(
-                initial_weights,
-                fields_to_search,
-                multipliers,
-                refit_score,
-                selected_sweep,
-                start_name=f"{start_name}_refit",
-            )
-            history.extend(refit_history)
-        final_weights[start_name] = refit_weights
+        # Use the validation-selected training checkpoint directly; no refit on
+        # train plus validation is performed in this compute-conscious plan.
+        final_weights[start_name] = selected_weights
 
     # Test outcomes are loaded only after both search procedures and sweep selection are frozen.
     test_outcomes = [
@@ -417,17 +489,9 @@ def main() -> None:
         test_models[f"{start_name}_baseline"] = starting_weights[start_name]
         if final_weights[start_name] != starting_weights[start_name]:
             test_models[f"{start_name}_searched"] = final_weights[start_name]
-    for model_name, weights in test_models.items():
+    def record_test_model(model_name: str, evaluator) -> None:
         started = time.perf_counter()
-        test_rmse, rows = evaluate_weights(
-            test_outcomes,
-            covariates,
-            features,
-            feature_map,
-            fields,
-            weights,
-            diagnostics=True,
-        )
+        test_rmse, rows = evaluator()
         timings[f"{model_name}_test_evaluation_seconds"] = time.perf_counter() - started
         test_rows.extend({"model": model_name, **row} for row in rows)
         test_summary_rows.append({
@@ -448,6 +512,39 @@ def main() -> None:
                 "mean_abs_error": float(np.mean([abs(row["error"]) for row in setting_rows])),
                 "mean_max_abs_smd_after": float(np.mean([row["max_abs_smd_after"] for row in setting_rows])),
             })
+
+    for model_name, weights in test_models.items():
+        record_test_model(
+            model_name,
+            lambda weights=weights: evaluate_weights(
+                test_outcomes, covariates, features, feature_map, fields, weights,
+                diagnostics=True, executor=executor,
+            ),
+        )
+
+    pca_coordinates = _pca_coordinates(features)[0]
+    record_test_model(
+        "pca_mahalanobis",
+        lambda: evaluate_coordinates(
+            test_outcomes, covariates, lambda _item: pca_coordinates,
+            diagnostics=True, executor=executor,
+        ),
+    )
+    record_test_model(
+        "propensity_score_logit",
+        lambda: evaluate_coordinates(
+            test_outcomes,
+            covariates,
+            lambda item: _propensity_logits(features, item.treatment)[:, None],
+            diagnostics=True,
+            executor=executor,
+        ),
+    )
+
+    if candidate_pool is not None:
+        candidate_pool.shutdown(wait=True)
+    if executor is not None:
+        executor.shutdown(wait=True)
 
     write_csv(output_dir / "search_history.csv", history)
     write_csv(output_dir / "validation_sweep_metrics.csv", validation_rows)
@@ -477,7 +574,14 @@ def main() -> None:
         "starts": list(final_weights),
         "multipliers": multipliers,
         "maximum_sweeps": args.max_sweeps,
-        "test_models": list(test_models),
+        "workers": args.workers,
+        "candidate_workers": candidate_workers,
+        "refit_on_train_plus_validation": False,
+        "test_models": [
+            *test_models,
+            "pca_mahalanobis",
+            "propensity_score_logit",
+        ],
         "timings_seconds": timings,
         "output_dir": str(output_dir),
     }

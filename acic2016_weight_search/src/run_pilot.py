@@ -6,10 +6,13 @@ import argparse
 import csv
 import json
 import math
+import multiprocessing
+import os
 import re
 import sys
 import time
 from datetime import datetime, timezone
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Mapping, Sequence
 
@@ -43,6 +46,7 @@ DEFAULT_LLM_WEIGHTS = (
 DEFAULT_MULTIPLIERS = (0.1, 0.5, 1.0, 2.0, 10.0)
 DEFAULT_CONFIG = PROJECT_ROOT / "acic2016_weight_search" / "config" / "experiment.json"
 REPLICATION_PATTERN = re.compile(r"^zymu_(\d+)\.csv$")
+_PILOT_WORKER_CONTEXT = None
 
 
 def read_config(path: Path) -> dict:
@@ -160,6 +164,18 @@ def evaluate_weights(datasets, fields, weights, *, keep_rows=False):
     return (rmse, rows) if keep_rows else rmse
 
 
+def initialize_pilot_worker(datasets, fields) -> None:
+    global _PILOT_WORKER_CONTEXT
+    _PILOT_WORKER_CONTEXT = (datasets, fields)
+
+
+def score_pilot_candidate(weights: dict[str, float]) -> tuple[float, float]:
+    started = time.perf_counter()
+    datasets, fields = _PILOT_WORKER_CONTEXT
+    score = evaluate_weights(datasets, fields, weights)
+    return score, time.perf_counter() - started
+
+
 def parse_args() -> argparse.Namespace:
     config_parser = argparse.ArgumentParser(add_help=False)
     config_parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
@@ -204,6 +220,10 @@ def parse_args() -> argparse.Namespace:
         help="Positive relative weight factors; must include 1",
     )
     parser.add_argument("--max-sweeps", type=int, default=search.get("max_sweeps", 1))
+    parser.add_argument(
+        "--workers", type=int, default=max(1, int(os.environ.get("NSLOTS", "1"))),
+        help="Workers for multiplier candidates (defaults to SCC NSLOTS)",
+    )
     parser.add_argument("--output-dir", type=Path, default=output_default)
     return parser.parse_args()
 
@@ -219,6 +239,8 @@ def main() -> None:
         raise SystemExit("--multipliers must be positive and include 1")
     if args.max_sweeps < 1:
         raise SystemExit("--max-sweeps must be at least 1")
+    if args.workers < 1:
+        raise SystemExit("--workers must be at least 1")
 
     datasets = []
     replication_files_by_setting = {}
@@ -272,12 +294,33 @@ def main() -> None:
     final_replication_rows = []
     evaluation_count = 0
     all_search_start = time.perf_counter()
+    candidate_workers = min(4, args.workers, len(factors))
+    candidate_pool = None
+    if candidate_workers > 1:
+        context = multiprocessing.get_context("fork" if os.name == "posix" else "spawn")
+        candidate_pool = ProcessPoolExecutor(
+            max_workers=candidate_workers,
+            mp_context=context,
+            initializer=initialize_pilot_worker,
+            initargs=(datasets, source_fields),
+        )
 
     for start_name, initial_weights in starting_vectors:
         def score(candidate_weights: Mapping[str, float]) -> float:
             nonlocal evaluation_count
             evaluation_count += 1
             return evaluate_weights(datasets, source_fields, candidate_weights)
+
+        def score_batch(candidates: Sequence[dict[str, float]]):
+            if candidate_pool is None:
+                results = []
+                for candidate in candidates:
+                    started = time.perf_counter()
+                    results.append((score(candidate), time.perf_counter() - started))
+                return results
+            nonlocal evaluation_count
+            evaluation_count += len(candidates)
+            return list(candidate_pool.map(score_pilot_candidate, candidates))
 
         best_weights, best_rmse, history = coordinate_search(
             initial_weights,
@@ -286,6 +329,7 @@ def main() -> None:
             score,
             args.max_sweeps,
             start_name=start_name,
+            score_candidates=score_batch,
         )
         search_history.extend(history)
         _, rows = evaluate_weights(
@@ -298,6 +342,8 @@ def main() -> None:
         }
         print(f"Finished {start_name} start: RMSE={best_rmse:.6f}", flush=True)
 
+    if candidate_pool is not None:
+        candidate_pool.shutdown(wait=True)
     elapsed = time.perf_counter() - all_search_start
     with (output_dir / "candidate_history.csv").open("w", encoding="utf-8", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=list(search_history[0]))
@@ -323,6 +369,8 @@ def main() -> None:
         "starts": [name for name, _ in starting_vectors],
         "multipliers": factors,
         "max_sweeps": args.max_sweeps,
+        "workers": args.workers,
+        "candidate_workers": candidate_workers,
         "candidate_evaluations": evaluation_count,
         "elapsed_seconds": elapsed,
         "mean_candidate_evaluation_seconds": float(np.mean(evaluation_seconds)) if evaluation_seconds else None,

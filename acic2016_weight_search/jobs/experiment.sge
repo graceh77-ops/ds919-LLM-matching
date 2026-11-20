@@ -1,15 +1,18 @@
 #!/bin/bash -l
 # Submit from acic2016_weight_search with: qsub jobs/experiment.sge
-# Increase or override the time request after reviewing pilot timings.
+# This job runs a two-sweep ceiling with parallel replication scoring.
 #$ -N acic_weight_search
 #$ -cwd
 #$ -V
-#$ -pe omp 1
-#$ -l h_rt=24:00:00
-#$ -l mem_per_core=8G
+#$ -pe omp 4
+#$ -l h_rt=72:00:00
+#$ -l mem_per_core=4G
 #$ -o logs/experiment.$JOB_ID.out
 #$ -e logs/experiment.$JOB_ID.err
 
 set -euo pipefail
 module load python3
-python src/run_experiment.py "$@"
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+python src/run_experiment.py --workers "${NSLOTS:-1}" "$@"
