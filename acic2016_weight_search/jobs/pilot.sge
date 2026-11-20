@@ -1,0 +1,14 @@
+#!/bin/bash
+# Submit from acic2016_weight_search with: qsub jobs/pilot.sge [run_pilot.py options]
+# Activate/load the Python environment containing numpy, pandas, and scipy first.
+#$ -N acic_weight_pilot
+#$ -cwd
+#$ -V
+#$ -pe omp 1
+#$ -l h_rt=02:00:00
+#$ -l mem_per_core=4G
+#$ -o logs/pilot.$JOB_ID.out
+#$ -e logs/pilot.$JOB_ID.err
+
+set -euo pipefail
+python src/run_pilot.py "$@"

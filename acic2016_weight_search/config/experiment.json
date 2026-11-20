@@ -1,0 +1,50 @@
+{
+  "data_dir": "../acic2016/data/raw/full_data",
+  "data": {
+    "settings": "all",
+    "replications_per_setting": 100,
+    "rows_per_replication": 4802,
+    "source_covariate_count": 58,
+    "encoded_column_count": 79
+  },
+  "search": {
+    "scope": "global",
+    "field_set": "all",
+    "algorithm": "coordinate_wise",
+    "candidate_multipliers": [0.1, 0.5, 1, 2, 10],
+    "initializations": ["identity", "llm"],
+    "max_sweeps": 1,
+    "llm_weights": "../acic2016/results/llm_weights/deepseek_api/20261026T234904Z/weights.json"
+  },
+  "pilot": {
+    "settings": [1],
+    "replications": [1, 2, 3, 4, 5],
+    "purpose": "timing_and_code_check_only"
+  },
+  "split": {
+    "unit": "replication",
+    "train_fraction": 0.6,
+    "validation_fraction": 0.2,
+    "test_fraction": 0.2,
+    "seed": null,
+    "force_training": [
+      {"setting": 1, "replications": [1, 2, 3, 4, 5]}
+    ]
+  },
+  "objective": {
+    "target": "realized_satt",
+    "metric": "rmse"
+  },
+  "matching": {
+    "method": "generalized_mahalanobis",
+    "ratio": "1:1",
+    "replacement": true,
+    "caliper": null
+  },
+  "outputs": {
+    "directory": "results/pilot_runs",
+    "save_candidate_history": true,
+    "save_best_weights": true,
+    "save_run_metadata": true
+  }
+}
