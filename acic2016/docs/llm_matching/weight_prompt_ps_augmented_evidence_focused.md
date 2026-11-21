@@ -1,0 +1,128 @@
+# ACIC 2016 Evidence-Focused PS-Augmented Weight Prompt
+
+Use this prompt in a new, isolated LLM chat. Do not add pilot results,
+matching diagnostics, previous weight vectors, or other conversation context.
+
+---
+
+Assign a relative matching-priority score to each of the 59 covariates described below. Use the study context and field descriptions here together with established epidemiologic evidence or strong biological rationale relevant to birthweight and IQ. Focus on supported reasoning rather than speculative links. Do not use observed data, matching results, or information about which variables generated treatment or outcomes in an ACIC simulation; those data-generating roles are not provided.
+
+**Study context:** The motivating hypothetical study concerns the effect of
+birthweight on IQ. 
+
+The covariates come from a de-identified Collaborative Perinatal Project
+dataset. Their original CPP labels below are provisional: the available
+package manual lists the original variables in order but does not publish an
+explicit field-by-field crosswalk for all 58 columns. Some positions are
+corroborated independently; treat the remaining labels as tentative. They
+represent possible confounders, instruments, and unrelated fields in the
+source benchmark; the role of each field in a particular simulation setting
+is not given. A high score means the field deserves more
+priority when forming treated-control matches based on its described meaning.
+For each field, use established evidence or strong biological rationale to
+judge whether it could plausibly be a pre-treatment confounder or a pre-treatment
+predictor of IQ in the birthweight-to-IQ task. Respect temporal order: a
+variable measured after birthweight, or plausibly affected by it, should not
+receive priority as a confounder. Do not infer that a field was used in an
+ACIC simulation data-generating process. The field mappings are provisional,
+and category codes, units, and some timing details are unknown; reflect that
+uncertainty in your scores.
+
+For `propensity_score`, consider its methodological role as a summary of
+estimated treatment assignment that may help balance treated and control
+units. It is generated from treatment and the original covariates, not an
+independent clinical characteristic, so do not assign it a biological role.
+
+**Original covariates:**
+
+- `x_1` — Mother's age.
+- `x_2` — Mother's marital status.
+- `x_3` — Mother's cigarettes smoked per day.
+- `x_4` — Mother's years of smoking.
+- `x_5` — Mother's height.
+- `x_6` — Mother's weight before the pregnancy.
+- `x_7` — Count of mother's cardiovascular conditions.
+- `x_8` — Count of mother's pulmonary conditions.
+- `x_9` — Count of mother's hematological conditions.
+- `x_10` — Count of mother's endocrine conditions.
+- `x_11` — Count of mother's venereal conditions.
+- `x_12` — Count of mother's urinary conditions.
+- `x_13` — Count of mother's gynecological conditions.
+- `x_14` — Count of mother's neurological conditions.
+- `x_15` — Count of mother's obstetric complications.
+- `x_16` — Count of mother's infectious diseases.
+- `x_17` — Mother's work-status indicator.
+- `x_18` — Mother's years of education.
+- `x_19` — Family income.
+- `x_20` — Housing density.
+- `x_21` — Mother's birthplace.
+- `x_22` — Consanguinity indicator.
+- `x_23` — Socioeconomic measure.
+- `x_24` — Mother's race.
+- `x_25` — Mother's age at menarche.
+- `x_26` — Mother's diastolic blood pressure.
+- `x_27` — Mother's own birth weight.
+- `x_28` — Father's age.
+- `x_29` — Father's years of education.
+- `x_30` — Number of premature births.
+- `x_31` — Number of abortions.
+- `x_32` — Number of prior pregnancies.
+- `x_33` — Number of stillbirths.
+- `x_34` — Child's Bayley mental score.
+- `x_35` — Child's Bayley motor score.
+- `x_36` — Placental weight.
+- `x_37` — Umbilical cord length.
+- `x_38` — Child's sex.
+- `x_39` — Child's total APGAR score at one minute.
+- `x_40` — Child's total APGAR score at five minutes.
+- `x_41` — Days of bottle feeding.
+- `x_42` — Days of breastfeeding.
+- `x_43` — Child's bilirubin measure.
+- `x_44` — Child's hematocrit measure.
+- `x_45` — Child's hemoglobin measure.
+- `x_46` — Count of child's neurological abnormalities.
+- `x_47` — Count of child's central nervous system conditions.
+- `x_48` — Count of child's musculoskeletal conditions.
+- `x_49` — Count of child's respiratory abnormalities.
+- `x_50` — Count of child's cardiovascular abnormalities.
+- `x_51` — Child liver-abnormality field.
+- `x_52` — Count of child's hematological conditions.
+- `x_53` — Count of child's infections.
+- `x_54` — Child syndrome field.
+- `x_55` — Count of child's endocrine disorders.
+- `x_56` — Count of procedures involving the child.
+- `x_57` — Child's head size at one year.
+- `x_58` — Gestational/delivery measure.
+- `propensity_score` — A generated scalar equal to the estimated probability
+  that `z = 1`, from an unpenalized logistic regression of treatment `z` on all
+  79 encoded original covariate columns, fit separately within each 
+  simulation replication. This is a summary derived from the listed
+  covariates and treatment assignment, not an independently measured clinical
+  characteristic.
+
+Return one integer score from 0 to 10 for each of the 59 entries: the 58 original covariates and `propensity_score`. Evaluate the propensity-score coordinate as an additional matching dimension, while recognizing that it is generated from the original covariates and treatment assignment. A score of 0 means the
+lowest relative matching priority (and that it will not have any influence on the matching distance whatsoever) and 10 means the highest. 
+Scores do not need to sum to any value. Use the entire scale where appropriate and make judgments independently; do not assign equal scores automatically.
+
+Return only a JSON object with exactly these 59 keys (`x_1` through `x_58` and `propensity_score`)
+and integer values. Do not include prose, comments, markdown fences, or extra
+keys. The zeros below are placeholders showing the required keys and are not
+suggested scores.
+
+```json
+{
+  "x_1": 0, "x_2": 0, "x_3": 0, "x_4": 0, "x_5": 0, "x_6": 0,
+  "x_7": 0, "x_8": 0, "x_9": 0, "x_10": 0, "x_11": 0, "x_12": 0,
+  "x_13": 0, "x_14": 0, "x_15": 0, "x_16": 0, "x_17": 0, "x_18": 0,
+  "x_19": 0, "x_20": 0, "x_21": 0, "x_22": 0, "x_23": 0, "x_24": 0,
+  "x_25": 0, "x_26": 0, "x_27": 0, "x_28": 0, "x_29": 0, "x_30": 0,
+  "x_31": 0, "x_32": 0, "x_33": 0, "x_34": 0, "x_35": 0, "x_36": 0,
+  "x_37": 0, "x_38": 0, "x_39": 0, "x_40": 0, "x_41": 0, "x_42": 0,
+  "x_43": 0, "x_44": 0, "x_45": 0, "x_46": 0, "x_47": 0, "x_48": 0,
+  "x_49": 0, "x_50": 0, "x_51": 0, "x_52": 0, "x_53": 0, "x_54": 0,
+  "x_55": 0, "x_56": 0, "x_57": 0, "x_58": 0,
+  "propensity_score": 0
+}
+```
+
+---

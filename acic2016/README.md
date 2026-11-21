@@ -42,15 +42,25 @@ python .\acic2016\src\get_deepseek_weights.py --ps-augmented
 ```
 
 This saves a separately recorded 59-score vector under
-`acic2016/results/llm_weights/deepseek_api/ps_augmented/`. Then run a one
-replication pilot with both the existing 58-score vector and the new vector:
+`acic2016/results/llm_weights/deepseek_api/ps_augmented/prior_judgment/`.
+Generate the second vector with the evidence-focused prompt:
+
+```powershell
+python .\acic2016\src\get_deepseek_weights.py --ps-augmented-evidence-focused
+```
+
+It is saved separately under
+`acic2016/results/llm_weights/deepseek_api/ps_augmented/evidence_focused/`.
+Then run a one-replication pilot with the existing 58-score vector and both
+new vectors:
 
 ```powershell
 python .\acic2016\src\run_matching_experiment.py `
   --setting 1 `
   --replication zymu_13.csv `
   --weights-json .\acic2016\results\llm_weights\deepseek_api\20261026T234904Z\weights.json `
-  --ps-augmented-weights-json .\acic2016\results\llm_weights\deepseek_api\ps_augmented\TIMESTAMP\weights.json
+  --ps-augmented-weights-json .\acic2016\results\llm_weights\deepseek_api\ps_augmented\prior_judgment\TIMESTAMP\weights.json `
+  --ps-augmented-evidence-weights-json .\acic2016\results\llm_weights\deepseek_api\ps_augmented\evidence_focused\TIMESTAMP\weights.json
 ```
 
 The pilot includes the original identity, propensity-logit, PCA, and LLM
@@ -65,7 +75,8 @@ qsub acic2016/jobs/ps_augmented_benchmark.sge \
   --replications-per-setting 5 \
   --data-dir acic2016_weight_search/data/raw/full_data \
   --weights-json acic2016/results/llm_weights/deepseek_api/20261026T234904Z/weights.json \
-  --ps-augmented-weights-json acic2016/results/llm_weights/deepseek_api/ps_augmented/TIMESTAMP/weights.json
+  --ps-augmented-weights-json acic2016/results/llm_weights/deepseek_api/ps_augmented/prior_judgment/TIMESTAMP/weights.json \
+  --ps-augmented-evidence-weights-json acic2016/results/llm_weights/deepseek_api/ps_augmented/evidence_focused/TIMESTAMP/weights.json
 ```
 
 After reviewing the pilot timing and results, submit the same job without the

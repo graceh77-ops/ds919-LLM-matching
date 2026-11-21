@@ -24,10 +24,9 @@ EXPECTED_METHODS = {
     "pca_mahalanobis",
     "llm_weighted_generalized_mahalanobis",
 }
-PS_AUGMENTED_METHODS = {
+PS_AUGMENTED_BASE_METHODS = {
     "identity_ps_augmented_generalized_mahalanobis",
     "pca_ps_augmented_mahalanobis",
-    "llm_weighted_ps_augmented_generalized_mahalanobis",
 }
 RESULT_FILES = {
     "complete_information.csv",
@@ -132,7 +131,15 @@ def main() -> int:
         type=Path,
         help=(
             "Optional saved vector with keys x_1 through x_58 plus propensity_score; "
-            "adds identity, PCA, and LLM PS-augmented comparators"
+            "elicited with the prior-judgment prompt"
+        ),
+    )
+    parser.add_argument(
+        "--ps-augmented-evidence-weights-json",
+        type=Path,
+        help=(
+            "Optional 59-score vector elicited with the evidence-focused prompt; "
+            "can be run alongside the prior-judgment vector"
         ),
     )
     parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA_DIR)
@@ -181,13 +188,47 @@ def main() -> int:
     )
     if ps_augmented_weights_path is not None and not ps_augmented_weights_path.is_file():
         parser.error(f"PS-augmented weights file not found: {ps_augmented_weights_path}")
+    ps_augmented_evidence_weights_path = (
+        args.ps_augmented_evidence_weights_json.resolve()
+        if args.ps_augmented_evidence_weights_json
+        else None
+    )
+    if (
+        ps_augmented_evidence_weights_path is not None
+        and not ps_augmented_evidence_weights_path.is_file()
+    ):
+        parser.error(
+            "Evidence-focused PS-augmented weights file not found: "
+            f"{ps_augmented_evidence_weights_path}"
+        )
     ps_augmented_weights_hash = (
         hashlib.sha256(ps_augmented_weights_path.read_bytes()).hexdigest()
         if ps_augmented_weights_path is not None
         else None
     )
+    ps_augmented_evidence_weights_hash = (
+        hashlib.sha256(ps_augmented_evidence_weights_path.read_bytes()).hexdigest()
+        if ps_augmented_evidence_weights_path is not None
+        else None
+    )
+    augmented_vectors = {
+        style: path
+        for style, path in (
+            ("prior_judgment", ps_augmented_weights_path),
+            ("evidence_focused", ps_augmented_evidence_weights_path),
+        )
+        if path is not None
+    }
     expected_methods = EXPECTED_METHODS | (
-        PS_AUGMENTED_METHODS if ps_augmented_weights_path is not None else set()
+        (
+            PS_AUGMENTED_BASE_METHODS
+            | {
+                f"llm_weighted_ps_augmented_{style}_generalized_mahalanobis"
+                for style in augmented_vectors
+            }
+        )
+        if augmented_vectors
+        else set()
     )
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -237,6 +278,12 @@ def main() -> int:
             else None
         ),
         "ps_augmented_weights_sha256": ps_augmented_weights_hash,
+        "ps_augmented_evidence_weights_path": (
+            str(ps_augmented_evidence_weights_path)
+            if ps_augmented_evidence_weights_path is not None
+            else None
+        ),
+        "ps_augmented_evidence_weights_sha256": ps_augmented_evidence_weights_hash,
         "data_dir": str(args.data_dir.resolve()),
         "settings": selected_settings,
         "settings_n": len(selected_settings),
@@ -263,6 +310,7 @@ def main() -> int:
                 args.data_dir,
                 weights_path,
                 ps_augmented_weights_path,
+                ps_augmented_evidence_weights_path,
             )
             actual_methods = set(method_results["method"].astype(str))
             if actual_methods != expected_methods:

@@ -5,13 +5,12 @@ matching diagnostics, previous weight vectors, or other conversation context.
 
 ---
 
-Assign a relative matching-priority score to each of the 58 original covariates and the generated propensity-score coordinate described below. Use only the treatment and outcome definitions and the field
+Assign a relative matching-priority score to each of the 59 covariates described below. Use only the treatment and outcome definitions and the field
 descriptions in this prompt. Do not use observed data or assume you know which
 fields were used to generate treatment or outcomes.
 
 **Study context:** The motivating hypothetical study concerns the effect of
-birthweight on IQ. The potential outcomes and empirical results are not 
-provided.
+birthweight on IQ. 
 
 The covariates come from a de-identified Collaborative Perinatal Project
 dataset. Their original CPP labels below are provisional: the available
@@ -24,7 +23,7 @@ is not given. A high score means the field deserves more
 priority when forming treated-control matches based on its described meaning.
 Treat scores as relative prior judgments across this benchmark, not as claims
 that the field is a confounder or that it predicts the simulated treatment or
-outcome. Categorical codes have no supplied substantive labels.
+outcome.
 
 **Original covariates:**
 
@@ -88,15 +87,14 @@ outcome. Categorical codes have no supplied substantive labels.
 - `x_58` — Gestational/delivery measure.
 - `propensity_score` — A generated scalar equal to the estimated probability
   that `z = 1`, from an unpenalized logistic regression of treatment `z` on all
-  79 encoded original covariate columns, fit separately within each ACIC
+  79 encoded original covariate columns, fit separately within each 
   simulation replication. This is a summary derived from the listed
   covariates and treatment assignment, not an independently measured clinical
   characteristic.
 
 Return one integer score from 0 to 10 for each of the 59 entries: the 58 original covariates and `propensity_score`. Evaluate the propensity-score coordinate as an additional matching dimension, while recognizing that it is generated from the original covariates and treatment assignment. A score of 0 means the
-lowest relative matching priority and 10 means the highest. Scores do not need
-to sum to any value. Use the entire scale where appropriate and make judgments
-independently; do not assign equal scores automatically.
+lowest relative matching priority (and that it will not have any influence on the matching distance whatsoever) and 10 means the highest. 
+Scores do not need to sum to any value. Use the entire scale where appropriate and make judgments independently; do not assign equal scores automatically.
 
 Return only a JSON object with exactly these 59 keys (`x_1` through `x_58` and `propensity_score`)
 and integer values. Do not include prose, comments, markdown fences, or extra

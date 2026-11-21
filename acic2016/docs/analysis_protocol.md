@@ -83,6 +83,12 @@ the same replication. Resolve exact distance ties by original row order.
   propensity-score coordinate uses the predicted probability, while the
   standalone PSM comparator continues to use its logit.
 
+The PS-augmented LLM comparison uses two separately elicited vectors: a
+prior-judgment prompt that restricts scores to the prompt's descriptions, and
+an evidence-focused prompt that permits established epidemiologic evidence or
+strong biological rationale. Keep the model and generation settings the same
+and evaluate both vectors on the same replications in one benchmark run.
+
 For covariance-based distances, estimate covariance with `ddof = 1`. Floor
 eigenvalues at `1e-8` times the largest eigenvalue before inverse-square-root
 construction. Apply the same rule to retained PCA score covariance. Report the

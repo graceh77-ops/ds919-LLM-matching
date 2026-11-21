@@ -294,6 +294,7 @@ def run_replication(
     data_dir: Path = DEFAULT_DATA_DIR,
     weights_json: Path | None = None,
     ps_augmented_weights_json: Path | None = None,
+    ps_augmented_evidence_weights_json: Path | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame | None]:
     data = load_replication(setting, replication, data_dir)
     features = data.encoded_covariates.to_numpy(dtype=float)
@@ -337,7 +338,11 @@ def run_replication(
         )
 
     augmented_map: pd.DataFrame | None = None
-    if ps_augmented_weights_json is not None:
+    augmented_weight_files = [
+        ("prior_judgment", ps_augmented_weights_json),
+        ("evidence_focused", ps_augmented_evidence_weights_json),
+    ]
+    if any(path is not None for _, path in augmented_weight_files):
         augmented_features = np.column_stack([features, propensity_scores])
         augmented_map = _augmented_feature_map(data.feature_map)
         augmented_covariates = data.covariates.assign(
@@ -364,26 +369,36 @@ def run_replication(
             ]
         )
         augmented_fields = [*source_fields, "propensity_score"]
-        augmented_weights = _load_field_weights(
-            ps_augmented_weights_json, augmented_fields
-        )
-        augmented_column_weights = _expand_field_weights(
-            augmented_map,
-            augmented_weights,
-            [*data.encoded_covariates.columns, "propensity_score"],
-        )
-        methods.append(
-            (
-                "llm_weighted_ps_augmented_generalized_mahalanobis",
-                _mahalanobis_coordinates(augmented_features, augmented_column_weights),
-                {
-                    "llm_field_weight_mean": float(
-                        np.mean(list(augmented_weights.values()))
-                    ),
-                    "propensity_score_weight": augmented_weights["propensity_score"],
-                },
+        for prompt_style, weight_path in augmented_weight_files:
+            if weight_path is None:
+                continue
+            augmented_weights = _load_field_weights(weight_path, augmented_fields)
+            augmented_column_weights = _expand_field_weights(
+                augmented_map,
+                augmented_weights,
+                [*data.encoded_covariates.columns, "propensity_score"],
             )
-        )
+            methods.append(
+                (
+                    f"llm_weighted_ps_augmented_{prompt_style}_generalized_mahalanobis",
+                    _mahalanobis_coordinates(
+                        augmented_features, augmented_column_weights
+                    ),
+                    {
+                        "llm_field_weight_mean": float(
+                            np.mean(list(augmented_weights.values()))
+                        ),
+                        "propensity_score_weight": augmented_weights[
+                            "propensity_score"
+                        ],
+                    },
+                )
+            )
+
+    augmented_method_names = {
+        "identity_ps_augmented_generalized_mahalanobis",
+        "pca_ps_augmented_mahalanobis",
+    }
 
     rows = [
         _evaluate_method(
@@ -395,10 +410,10 @@ def run_replication(
             data.expected_satt,
             (
                 augmented_covariates
-                if method.endswith("ps_augmented_generalized_mahalanobis")
-                or method == "pca_ps_augmented_mahalanobis"
+                if method in augmented_method_names
+                or method.startswith("llm_weighted_ps_augmented_")
                 else data.covariates
-            ) if ps_augmented_weights_json is not None else data.covariates,
+            ) if any(path is not None for _, path in augmented_weight_files) else data.covariates,
             extra,
         )
         for method, coordinates, extra in methods
@@ -442,6 +457,11 @@ def _parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--ps-augmented-evidence-weights-json",
+        type=Path,
+        help="Optional 59-score JSON elicited with the evidence-focused prompt",
+    )
+    parser.add_argument(
         "--output-dir",
         type=Path,
         help="Output folder (default: next pilot_runN_TIMESTAMP folder in acic2016/results)",
@@ -475,6 +495,7 @@ def main() -> None:
         args.data_dir,
         args.weights_json,
         args.ps_augmented_weights_json,
+        args.ps_augmented_evidence_weights_json,
     )
     results.to_csv(output_dir / "complete_information.csv", index=False)
     references.to_csv(output_dir / "replication_reference.csv", index=False)

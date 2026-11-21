@@ -20,6 +20,9 @@ PROMPT_PATH = ROOT / "docs" / "llm_matching" / "weight_prompt.md"
 PS_AUGMENTED_PROMPT_PATH = (
     ROOT / "docs" / "llm_matching" / "weight_prompt_ps_augmented.md"
 )
+PS_AUGMENTED_EVIDENCE_PROMPT_PATH = (
+    ROOT / "docs" / "llm_matching" / "weight_prompt_ps_augmented_evidence_focused.md"
+)
 OUTPUT_ROOT = ROOT / "results" / "llm_weights" / "deepseek_api"
 API_URL = "https://api.deepseek.com/chat/completions"
 EXPECTED_KEYS = {f"x_{i}" for i in range(1, 59)}
@@ -88,10 +91,16 @@ def main() -> int:
         help="DeepSeek model name (default: DEEPSEEK_MODEL or deepseek-flash)",
     )
     parser.add_argument("--timeout", type=int, default=120)
-    parser.add_argument(
+    prompt_group = parser.add_mutually_exclusive_group()
+    prompt_group.add_argument(
         "--ps-augmented",
         action="store_true",
-        help="Elicit 59 scores, including one for the generated propensity coordinate",
+        help="Elicit 59 scores using the prior-judgment PS-augmented prompt",
+    )
+    prompt_group.add_argument(
+        "--ps-augmented-evidence-focused",
+        action="store_true",
+        help="Elicit 59 scores using the evidence-focused PS-augmented prompt",
     )
     args = parser.parse_args()
 
@@ -104,9 +113,22 @@ def main() -> int:
 
     run_time = datetime.now(timezone.utc)
     run_id = run_time.strftime("%Y%m%dT%H%M%SZ")
-    prompt_path = PS_AUGMENTED_PROMPT_PATH if args.ps_augmented else PROMPT_PATH
-    expected_keys = PS_AUGMENTED_KEYS if args.ps_augmented else EXPECTED_KEYS
-    output_root = OUTPUT_ROOT / "ps_augmented" if args.ps_augmented else OUTPUT_ROOT
+    ps_augmented = args.ps_augmented or args.ps_augmented_evidence_focused
+    if args.ps_augmented_evidence_focused:
+        prompt_path = PS_AUGMENTED_EVIDENCE_PROMPT_PATH
+        prompt_style = "evidence_focused"
+    elif args.ps_augmented:
+        prompt_path = PS_AUGMENTED_PROMPT_PATH
+        prompt_style = "prior_judgment"
+    else:
+        prompt_path = PROMPT_PATH
+        prompt_style = "original_covariates"
+    expected_keys = PS_AUGMENTED_KEYS if ps_augmented else EXPECTED_KEYS
+    output_root = (
+        OUTPUT_ROOT / "ps_augmented" / prompt_style
+        if ps_augmented
+        else OUTPUT_ROOT
+    )
     run_dir = output_root / run_id
     if run_dir.exists():
         raise FileExistsError(f"Refusing to overwrite existing run: {run_dir}")
@@ -138,7 +160,8 @@ def main() -> int:
             "requested_model": args.model,
             "returned_model": response.get("model"),
             "prompt_path": str(prompt_path),
-            "schema": "58_covariates_plus_propensity_score" if args.ps_augmented else "58_covariates",
+            "schema": "58_covariates_plus_propensity_score" if ps_augmented else "58_covariates",
+            "prompt_style": prompt_style,
             "prompt_sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
             "temperature": 0,
             "thinking": "disabled",
@@ -161,7 +184,8 @@ def main() -> int:
         "requested_model": args.model,
         "returned_model": response.get("model"),
         "prompt_path": str(prompt_path),
-        "schema": "58_covariates_plus_propensity_score" if args.ps_augmented else "58_covariates",
+        "schema": "58_covariates_plus_propensity_score" if ps_augmented else "58_covariates",
+        "prompt_style": prompt_style,
         "prompt_sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
         "temperature": 0,
         "thinking": "disabled",

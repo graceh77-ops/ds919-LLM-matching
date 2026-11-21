@@ -94,19 +94,23 @@ the earlier no-LLM pilot is in `results/pilot_run/`. The full 77-setting,
 
 ## Propensity-score-augmented elicitation
 
-For the separate augmented experiment, use
-[`weight_prompt_ps_augmented.md`](weight_prompt_ps_augmented.md) in a fresh
-elicitation. It requests 59 scores: the original 58 fields plus the fitted
-propensity probability as a generated matching coordinate. Run
-`python .\acic2016\src\get_deepseek_weights.py --ps-augmented` from the
-repository root. The validated vector is saved under
-`acic2016/results/llm_weights/deepseek_api/ps_augmented/<timestamp>/`.
-Keep it separate from the original 58-score vector; the 59th score is not a
-clinical covariate weight and should be interpreted as the LLM's priority for
-the generated propensity coordinate.
+For the augmented comparison, elicit two separate 59-score vectors using the
+same model and generation settings. The prior-judgment prompt is
+[`weight_prompt_ps_augmented.md`](weight_prompt_ps_augmented.md); run
+`python .\acic2016\src\get_deepseek_weights.py --ps-augmented`. The
+evidence-focused prompt is
+[`weight_prompt_ps_augmented_evidence_focused.md`](weight_prompt_ps_augmented_evidence_focused.md);
+run `python .\acic2016\src\get_deepseek_weights.py --ps-augmented-evidence-focused`.
+Each vector includes the original 58 fields plus the fitted propensity
+probability as a generated matching coordinate. The results are saved
+separately under `acic2016/results/llm_weights/deepseek_api/ps_augmented/`.
+Keep both separate from the original 58-score vector. The propensity score is
+not an independent clinical covariate; its weight expresses the LLM's
+matching priority for the generated coordinate.
 
 The matching runner fits the propensity model separately within each
 replication, appends the predicted probability to the 79 encoded columns, and
-compares PS-augmented identity, PCA, and LLM-weighted matching with the
-original methods and standalone propensity-score-logit matching. This adds a
-coordinate; it does not residualize the original covariates.
+can compare both prompt-derived vectors in one pass alongside PS-augmented
+identity and PCA, the original methods, and standalone propensity-score-logit
+matching. This adds a coordinate; it does not residualize the original
+covariates. The two LLM methods differ only in the elicitation prompt.
