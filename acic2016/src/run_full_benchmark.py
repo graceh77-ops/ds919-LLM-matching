@@ -38,6 +38,7 @@ RESULT_FILES = {
     "run_metadata.json",
     "summary_by_setting.csv",
     "summary_overall.csv",
+    "summary_pooled_by_setting.csv",
 }
 
 
@@ -79,7 +80,9 @@ def _append_csv(frame: pd.DataFrame, path: Path) -> None:
     frame.to_csv(path, mode="a", header=not path.exists() or path.stat().st_size == 0, index=False)
 
 
-def _write_summaries(results_path: Path, output_dir: Path) -> None:
+def _write_summaries(
+    results_path: Path, references_path: Path, output_dir: Path
+) -> None:
     if not results_path.is_file() or results_path.stat().st_size == 0:
         return
     results = pd.read_csv(results_path)
@@ -116,6 +119,55 @@ def _write_summaries(results_path: Path, output_dir: Path) -> None:
         .sort_values("method")
     )
     overall.to_csv(output_dir / "summary_overall.csv", index=False)
+
+    references = pd.read_csv(references_path)
+    pooled_inputs = results.merge(
+        references[
+            ["setting", "replication", "realized_satt", "expected_satt"]
+        ],
+        on=["setting", "replication"],
+        how="inner",
+        validate="many_to_one",
+    )
+    pooled_rows = []
+    for (setting, method), group in pooled_inputs.groupby(
+        ["setting", "method"], sort=True
+    ):
+        treated_weights = group["treated_n"].astype(float)
+        total_treated = float(treated_weights.sum())
+        if total_treated <= 0:
+            continue
+        pooled_att = float(
+            (group["matched_att"] * treated_weights).sum() / total_treated
+        )
+        pooled_satt = float(
+            (group["realized_satt"] * treated_weights).sum() / total_treated
+        )
+        pooled_expected_satt = float(
+            (group["expected_satt"] * treated_weights).sum() / total_treated
+        )
+        pooled_rows.append(
+            {
+                "setting": int(setting),
+                "method": method,
+                "replications_n": int(group["replication"].nunique()),
+                "pooled_treated_units_n": int(total_treated),
+                "pooled_matched_att": pooled_att,
+                "pooled_realized_satt": pooled_satt,
+                "error_vs_pooled_realized_satt": pooled_att - pooled_satt,
+                "absolute_error_vs_pooled_realized_satt": abs(
+                    pooled_att - pooled_satt
+                ),
+                "pooled_expected_satt": pooled_expected_satt,
+                "error_vs_pooled_expected_satt": pooled_att - pooled_expected_satt,
+                "absolute_error_vs_pooled_expected_satt": abs(
+                    pooled_att - pooled_expected_satt
+                ),
+            }
+        )
+    pd.DataFrame(pooled_rows).to_csv(
+        output_dir / "summary_pooled_by_setting.csv", index=False
+    )
 
 
 def main() -> int:
@@ -289,6 +341,11 @@ def main() -> int:
         "settings_n": len(selected_settings),
         "replications_per_setting": args.replications_per_setting,
         "methods": sorted(expected_methods),
+        "pooled_setting_summary": (
+            "Within each setting, replication-specific matched ATTs and SATT "
+            "references are averaged with treated-count weights. Matches are "
+            "formed within replications; no cross-replication matches are made."
+        ),
     }
     metadata_path = output_dir / "run_metadata.json"
     metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
@@ -350,7 +407,7 @@ def main() -> int:
                 flush=True,
             )
 
-    _write_summaries(results_path, output_dir)
+    _write_summaries(results_path, references_path, output_dir)
     failure_count = max(
         0,
         sum(1 for _ in failures_path.open(encoding="utf-8")) - 1,

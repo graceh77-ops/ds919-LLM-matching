@@ -110,6 +110,13 @@ replication rather than repeating them as if they were separate method
 estimates. Aggregate results by method within each setting and across all 77
 settings; retain per-replication results for analysis. Treat the 7,700
 replications as simulation replications, not independent real-world cohorts.
+As a secondary setting-level view, pool the treated units across the
+replications within each setting by weighting each replication's matched ATT
+and realized SATT by its treated count. Matching remains within each
+replication; do not match units across replications or pool across distinct
+settings. The full runner writes this view to
+`summary_pooled_by_setting.csv`; it complements rather than replaces the
+per-replication errors and RMSE.
 For matched ATT uncertainty, use a control-clustered standard error of paired
 treated-minus-matched-control differences, clustering on matched control ID to
 account for control reuse. Report it as a matching-estimator uncertainty

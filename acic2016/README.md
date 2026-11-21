@@ -83,6 +83,9 @@ After reviewing the pilot timing and results, submit the same job without the
 `--settings` or `--replications-per-setting` options to run all 7,700
 replications. Logs go under `logs/`; benchmark results go under
 `acic2016/results/`.
+The full run also writes `summary_pooled_by_setting.csv`, which weights each
+replication's estimate and SATT by its treated count within each setting. It
+does not combine or match units across replications.
 
 ## Data layout
 
