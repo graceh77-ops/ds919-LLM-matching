@@ -1,0 +1,26 @@
+{
+  "status": "success",
+  "timestamp_utc": "2026-11-21T02:44:31.547391+00:00",
+  "provider": "DeepSeek",
+  "requested_model": "deepseek-flash",
+  "returned_model": "deepseek-flash",
+  "prompt_path": "C:\\Users\\grace\\Desktop\\LLM_Matching\\ds919-LLM-matching\\acic2016\\docs\\llm_matching\\weight_prompt_ps_augmented_evidence_focused.md",
+  "schema": "58_covariates_plus_propensity_score",
+  "prompt_style": "evidence_focused",
+  "prompt_sha256": "101548601345cbbc2752d269f81fd61983edae7c09c5ead4ed70844be41f225f",
+  "temperature": 0,
+  "thinking": "disabled",
+  "max_tokens": 2048,
+  "stream": false,
+  "response_format": "json_object",
+  "usage": {
+    "prompt_tokens": 1958,
+    "completion_tokens": 472,
+    "total_tokens": 2430,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "prompt_cache_hit_tokens": 0,
+    "prompt_cache_miss_tokens": 1958
+  }
+}
