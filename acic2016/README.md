@@ -5,6 +5,8 @@ evaluation of the project's matching methods. The replication loader and
 single-replication runner are available. The runner currently compares
 identity generalized Mahalanobis, propensity score matching, and PCA
 Mahalanobis; optional LLM field weights can be provided as JSON.
+An optional PS-augmented comparison appends the fitted propensity probability
+as a 59th source-level coordinate and accepts a new 59-score LLM vector.
 
 The planned evaluation is summarized in the
 [analysis protocol](docs/analysis_protocol.md).
@@ -31,6 +33,45 @@ encoded-column feature map to a new numbered pilot folder
 overwrite an existing run. A one-replication pilot is not evidence of
 performance across the benchmark; the full evaluation covers 77 settings and
 100 replications per setting.
+
+To elicit a fresh LLM weight vector for the 58 original fields plus the
+generated propensity-score coordinate, set `DEEPSEEK_API_KEY` and run:
+
+```powershell
+python .\acic2016\src\get_deepseek_weights.py --ps-augmented
+```
+
+This saves a separately recorded 59-score vector under
+`acic2016/results/llm_weights/deepseek_api/ps_augmented/`. Then run a one
+replication pilot with both the existing 58-score vector and the new vector:
+
+```powershell
+python .\acic2016\src\run_matching_experiment.py `
+  --setting 1 `
+  --replication zymu_13.csv `
+  --weights-json .\acic2016\results\llm_weights\deepseek_api\20261026T234904Z\weights.json `
+  --ps-augmented-weights-json .\acic2016\results\llm_weights\deepseek_api\ps_augmented\TIMESTAMP\weights.json
+```
+
+The pilot includes the original identity, propensity-logit, PCA, and LLM
+methods plus PS-augmented identity, PCA, and LLM methods. For an SCC timing
+pilot, create the log folder and submit five replications from setting 1,
+pointing to the SCC data and weights:
+
+```bash
+mkdir -p logs
+qsub acic2016/jobs/ps_augmented_benchmark.sge \
+  --settings 1 \
+  --replications-per-setting 5 \
+  --data-dir acic2016_weight_search/data/raw/full_data \
+  --weights-json acic2016/results/llm_weights/deepseek_api/20261026T234904Z/weights.json \
+  --ps-augmented-weights-json acic2016/results/llm_weights/deepseek_api/ps_augmented/TIMESTAMP/weights.json
+```
+
+After reviewing the pilot timing and results, submit the same job without the
+`--settings` or `--replications-per-setting` options to run all 7,700
+replications. Logs go under `logs/`; benchmark results go under
+`acic2016/results/`.
 
 ## Data layout
 

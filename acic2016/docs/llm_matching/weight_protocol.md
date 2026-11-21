@@ -91,3 +91,22 @@ setting 1, replication `zymu_13.csv`. The LLM-weighted pilot outputs are in
 [`results/pilot_run2_20261027T000241Z/`](../../results/pilot_run2_20261027T000241Z/);
 the earlier no-LLM pilot is in `results/pilot_run/`. The full 77-setting,
 100-replication evaluation has not been run.
+
+## Propensity-score-augmented elicitation
+
+For the separate augmented experiment, use
+[`weight_prompt_ps_augmented.md`](weight_prompt_ps_augmented.md) in a fresh
+elicitation. It requests 59 scores: the original 58 fields plus the fitted
+propensity probability as a generated matching coordinate. Run
+`python .\acic2016\src\get_deepseek_weights.py --ps-augmented` from the
+repository root. The validated vector is saved under
+`acic2016/results/llm_weights/deepseek_api/ps_augmented/<timestamp>/`.
+Keep it separate from the original 58-score vector; the 59th score is not a
+clinical covariate weight and should be interpreted as the LLM's priority for
+the generated propensity coordinate.
+
+The matching runner fits the propensity model separately within each
+replication, appends the predicted probability to the 79 encoded columns, and
+compares PS-augmented identity, PCA, and LLM-weighted matching with the
+original methods and standalone propensity-score-logit matching. This adds a
+coordinate; it does not residualize the original covariates.

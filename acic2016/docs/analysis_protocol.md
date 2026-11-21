@@ -71,6 +71,17 @@ the same replication. Resolve exact distance ties by original row order.
   for numerical optimization; with an unpenalized linear logit and intercept,
   this is a reparameterization of the same model. Record a fitting failure
   rather than silently changing the model specification.
+- **PS-augmented identity, PCA, and LLM methods:** use the same fitted
+  propensity model, append its predicted probability to the 79 encoded columns,
+  and match on the resulting 80-column representation. This is the generated
+  59th source-level coordinate; it is a summary derived from treatment and the
+  original covariates, not a new independently measured characteristic and not
+  a residualization of omitted covariates. The augmented LLM vector has one
+  score for each of `x_1` through `x_58` plus `propensity_score`. Map the first
+  58 scores to their encoded columns and the final score to the probability
+  coordinate, then normalize the expanded 80-column diagonal to mean 1. The
+  propensity-score coordinate uses the predicted probability, while the
+  standalone PSM comparator continues to use its logit.
 
 For covariance-based distances, estimate covariance with `ddof = 1`. Floor
 eigenvalues at `1e-8` times the largest eigenvalue before inverse-square-root

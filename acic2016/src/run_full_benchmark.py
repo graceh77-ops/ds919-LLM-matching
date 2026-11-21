@@ -24,10 +24,16 @@ EXPECTED_METHODS = {
     "pca_mahalanobis",
     "llm_weighted_generalized_mahalanobis",
 }
+PS_AUGMENTED_METHODS = {
+    "identity_ps_augmented_generalized_mahalanobis",
+    "pca_ps_augmented_mahalanobis",
+    "llm_weighted_ps_augmented_generalized_mahalanobis",
+}
 RESULT_FILES = {
     "complete_information.csv",
     "replication_reference.csv",
     "feature_map.csv",
+    "ps_augmented_feature_map.csv",
     "failures.csv",
     "progress.jsonl",
     "run_metadata.json",
@@ -121,18 +127,68 @@ def main() -> int:
         required=True,
         help="One saved DeepSeek JSON vector with keys x_1 through x_58",
     )
+    parser.add_argument(
+        "--ps-augmented-weights-json",
+        type=Path,
+        help=(
+            "Optional saved vector with keys x_1 through x_58 plus propensity_score; "
+            "adds identity, PCA, and LLM PS-augmented comparators"
+        ),
+    )
     parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA_DIR)
     parser.add_argument(
         "--output-dir",
         type=Path,
         help="New output folder by default; pass an existing run folder to resume it",
     )
+    parser.add_argument(
+        "--settings",
+        default="all",
+        help="'all' or a comma-separated list of settings from 1 through 77",
+    )
+    parser.add_argument(
+        "--replications-per-setting",
+        type=int,
+        default=100,
+        help="Number of first replications per selected setting (1-100)",
+    )
     args = parser.parse_args()
+
+    if args.settings.strip().lower() == "all":
+        selected_settings = list(range(1, 78))
+    else:
+        try:
+            selected_settings = [int(value.strip()) for value in args.settings.split(",")]
+        except ValueError:
+            parser.error("--settings must be 'all' or comma-separated integers")
+        if (
+            not selected_settings
+            or len(set(selected_settings)) != len(selected_settings)
+            or any(setting < 1 or setting > 77 for setting in selected_settings)
+        ):
+            parser.error("--settings must contain unique integers from 1 through 77")
+    if not 1 <= args.replications_per_setting <= 100:
+        parser.error("--replications-per-setting must be between 1 and 100")
 
     weights_path = args.weights_json.resolve()
     if not weights_path.is_file():
         parser.error(f"Weights file not found: {weights_path}")
     weights_hash = hashlib.sha256(weights_path.read_bytes()).hexdigest()
+    ps_augmented_weights_path = (
+        args.ps_augmented_weights_json.resolve()
+        if args.ps_augmented_weights_json
+        else None
+    )
+    if ps_augmented_weights_path is not None and not ps_augmented_weights_path.is_file():
+        parser.error(f"PS-augmented weights file not found: {ps_augmented_weights_path}")
+    ps_augmented_weights_hash = (
+        hashlib.sha256(ps_augmented_weights_path.read_bytes()).hexdigest()
+        if ps_augmented_weights_path is not None
+        else None
+    )
+    expected_methods = EXPECTED_METHODS | (
+        PS_AUGMENTED_METHODS if ps_augmented_weights_path is not None else set()
+    )
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     output_dir = args.output_dir.resolve() if args.output_dir else _new_output_dir(timestamp)
@@ -159,11 +215,12 @@ def main() -> int:
 
     expected_pairs = [
         (setting, replication)
-        for setting in range(1, 78)
-        for replication in list_replications(setting, args.data_dir)
+        for setting in selected_settings
+        for replication in list_replications(setting, args.data_dir)[
+            : args.replications_per_setting
+        ]
     ]
-    if len(expected_pairs) != 7700:
-        raise RuntimeError(f"Expected 7,700 replications; found {len(expected_pairs)}")
+    expected_replications = len(expected_pairs)
 
     start_time = datetime.now(timezone.utc)
     started = time.monotonic()
@@ -174,10 +231,17 @@ def main() -> int:
         "completed_before_run": len(completed),
         "weights_path": str(weights_path),
         "weights_sha256": weights_hash,
+        "ps_augmented_weights_path": (
+            str(ps_augmented_weights_path)
+            if ps_augmented_weights_path is not None
+            else None
+        ),
+        "ps_augmented_weights_sha256": ps_augmented_weights_hash,
         "data_dir": str(args.data_dir.resolve()),
-        "settings_n": 77,
-        "replications_per_setting": 100,
-        "methods": sorted(EXPECTED_METHODS),
+        "settings": selected_settings,
+        "settings_n": len(selected_settings),
+        "replications_per_setting": args.replications_per_setting,
+        "methods": sorted(expected_methods),
     }
     metadata_path = output_dir / "run_metadata.json"
     metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
@@ -193,17 +257,24 @@ def main() -> int:
         if (setting, replication) in completed:
             continue
         try:
-            method_results, references, feature_map = run_replication(
+            method_results, references, feature_map, augmented_feature_map = run_replication(
                 setting,
                 replication,
                 args.data_dir,
                 weights_path,
+                ps_augmented_weights_path,
             )
             actual_methods = set(method_results["method"].astype(str))
-            if actual_methods != EXPECTED_METHODS:
+            if actual_methods != expected_methods:
                 raise RuntimeError(f"Unexpected method set: {sorted(actual_methods)}")
             if not (output_dir / "feature_map.csv").exists():
                 feature_map.to_csv(output_dir / "feature_map.csv", index=False)
+            if augmented_feature_map is not None and not (
+                output_dir / "ps_augmented_feature_map.csv"
+            ).exists():
+                augmented_feature_map.to_csv(
+                    output_dir / "ps_augmented_feature_map.csv", index=False
+                )
             _append_csv(method_results, results_path)
             _append_csv(references, references_path)
             with progress_path.open("a", encoding="utf-8", newline="\n") as progress:
@@ -221,10 +292,11 @@ def main() -> int:
                 failures_path,
             )
 
-        if index % 10 == 0 or index == len(expected_pairs):
+        if index % 10 == 0 or index == expected_replications:
             elapsed = time.monotonic() - started
             print(
-                f"Scanned {index}/7700; successful {len(completed)}/7700; "
+                f"Scanned {index}/{expected_replications}; "
+                f"successful {len(completed)}/{expected_replications}; "
                 f"failures {sum(1 for _ in failures_path.open(encoding='utf-8')) - 1}; "
                 f"elapsed {elapsed / 60:.1f} min",
                 flush=True,
@@ -248,7 +320,7 @@ def main() -> int:
     metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     print(f"Benchmark status: {metadata['status']}")
     print(f"Results folder: {output_dir}")
-    return 0 if len(completed) == 7700 and not failure_count else 1
+    return 0 if len(completed) == expected_replications and not failure_count else 1
 
 
 if __name__ == "__main__":

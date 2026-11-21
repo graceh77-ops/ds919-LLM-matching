@@ -17,9 +17,13 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 PROMPT_PATH = ROOT / "docs" / "llm_matching" / "weight_prompt.md"
+PS_AUGMENTED_PROMPT_PATH = (
+    ROOT / "docs" / "llm_matching" / "weight_prompt_ps_augmented.md"
+)
 OUTPUT_ROOT = ROOT / "results" / "llm_weights" / "deepseek_api"
 API_URL = "https://api.deepseek.com/chat/completions"
 EXPECTED_KEYS = {f"x_{i}" for i in range(1, 59)}
+PS_AUGMENTED_KEYS = EXPECTED_KEYS | {"propensity_score"}
 
 
 def read_prompt(path: Path) -> str:
@@ -33,10 +37,13 @@ def read_prompt(path: Path) -> str:
     return prompt
 
 
-def validate_weights(content: str) -> dict[str, int]:
+def validate_weights(
+    content: str, expected_keys: set[str] = EXPECTED_KEYS
+) -> dict[str, int]:
     parsed = json.loads(content)
-    if not isinstance(parsed, dict) or set(parsed) != EXPECTED_KEYS:
-        raise ValueError("Response must contain exactly the keys x_1 through x_58")
+    if not isinstance(parsed, dict) or set(parsed) != expected_keys:
+        expected = ", ".join(sorted(expected_keys))
+        raise ValueError(f"Response must contain exactly these keys: {expected}")
     if any(type(value) is not int or not 0 <= value <= 10 for value in parsed.values()):
         raise ValueError("Every score must be an integer from 0 through 10")
     if not any(parsed.values()):
@@ -81,6 +88,11 @@ def main() -> int:
         help="DeepSeek model name (default: DEEPSEEK_MODEL or deepseek-flash)",
     )
     parser.add_argument("--timeout", type=int, default=120)
+    parser.add_argument(
+        "--ps-augmented",
+        action="store_true",
+        help="Elicit 59 scores, including one for the generated propensity coordinate",
+    )
     args = parser.parse_args()
 
     api_key = os.environ.get("DEEPSEEK_API_KEY")
@@ -92,11 +104,14 @@ def main() -> int:
 
     run_time = datetime.now(timezone.utc)
     run_id = run_time.strftime("%Y%m%dT%H%M%SZ")
-    run_dir = OUTPUT_ROOT / run_id
+    prompt_path = PS_AUGMENTED_PROMPT_PATH if args.ps_augmented else PROMPT_PATH
+    expected_keys = PS_AUGMENTED_KEYS if args.ps_augmented else EXPECTED_KEYS
+    output_root = OUTPUT_ROOT / "ps_augmented" if args.ps_augmented else OUTPUT_ROOT
+    run_dir = output_root / run_id
     if run_dir.exists():
         raise FileExistsError(f"Refusing to overwrite existing run: {run_dir}")
 
-    prompt = read_prompt(PROMPT_PATH)
+    prompt = read_prompt(prompt_path)
     response = request_completion(api_key, prompt, args.model, args.timeout)
     choices = response.get("choices") or []
     if not choices:
@@ -114,7 +129,7 @@ def main() -> int:
     (run_dir / "raw_model_text.txt").write_text(raw_text + "\n", encoding="utf-8")
 
     try:
-        weights = validate_weights(raw_text)
+        weights = validate_weights(raw_text, expected_keys)
     except (json.JSONDecodeError, ValueError) as exc:
         record = {
             "status": "validation_failed",
@@ -122,7 +137,8 @@ def main() -> int:
             "provider": "DeepSeek",
             "requested_model": args.model,
             "returned_model": response.get("model"),
-            "prompt_path": str(PROMPT_PATH),
+            "prompt_path": str(prompt_path),
+            "schema": "58_covariates_plus_propensity_score" if args.ps_augmented else "58_covariates",
             "prompt_sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
             "temperature": 0,
             "thinking": "disabled",
@@ -144,7 +160,8 @@ def main() -> int:
         "provider": "DeepSeek",
         "requested_model": args.model,
         "returned_model": response.get("model"),
-        "prompt_path": str(PROMPT_PATH),
+        "prompt_path": str(prompt_path),
+        "schema": "58_covariates_plus_propensity_score" if args.ps_augmented else "58_covariates",
         "prompt_sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
         "temperature": 0,
         "thinking": "disabled",

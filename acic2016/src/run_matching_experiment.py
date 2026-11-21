@@ -118,6 +118,24 @@ def _load_field_weights(path: Path, source_fields: list[str]) -> dict[str, float
     return parsed
 
 
+def _augmented_feature_map(feature_map: pd.DataFrame) -> pd.DataFrame:
+    """Return the encoded covariate map plus the generated propensity coordinate."""
+    propensity_row = pd.DataFrame(
+        [
+            {
+                "encoded_column": "propensity_score",
+                "source_field": "propensity_score",
+                "encoding": (
+                    "estimated treatment probability from a logistic model fit to "
+                    "the 79 encoded covariates and treatment within this replication"
+                ),
+                "level": "",
+            }
+        ]
+    )
+    return pd.concat([feature_map, propensity_row], ignore_index=True)
+
+
 def _expand_field_weights(
     feature_map: pd.DataFrame,
     field_weights: Mapping[str, float],
@@ -275,7 +293,8 @@ def run_replication(
     replication: str,
     data_dir: Path = DEFAULT_DATA_DIR,
     weights_json: Path | None = None,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    ps_augmented_weights_json: Path | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame | None]:
     data = load_replication(setting, replication, data_dir)
     features = data.encoded_covariates.to_numpy(dtype=float)
     treatment = data.treatment.to_numpy(dtype=int)
@@ -285,11 +304,13 @@ def run_replication(
         raise ValueError("Replication must include treated and control units")
 
     methods: list[tuple[str, np.ndarray, dict[str, float] | None]] = []
+    source_fields = list(data.covariates.columns)
     methods.append(
         ("identity_generalized_mahalanobis", _mahalanobis_coordinates(features), None)
     )
-    propensity = _propensity_logits(features, treatment)
-    methods.append(("propensity_score_logit", propensity[:, None], None))
+    propensity_logits = _propensity_logits(features, treatment)
+    propensity_scores = expit(propensity_logits)
+    methods.append(("propensity_score_logit", propensity_logits[:, None], None))
     pca_coordinates, pca_n, pca_variance = _pca_coordinates(features)
     methods.append(
         (
@@ -303,7 +324,6 @@ def run_replication(
     )
 
     if weights_json is not None:
-        source_fields = list(data.covariates.columns)
         field_weights = _load_field_weights(weights_json, source_fields)
         column_weights = _expand_field_weights(
             data.feature_map, field_weights, list(data.encoded_covariates.columns)
@@ -316,6 +336,55 @@ def run_replication(
             )
         )
 
+    augmented_map: pd.DataFrame | None = None
+    if ps_augmented_weights_json is not None:
+        augmented_features = np.column_stack([features, propensity_scores])
+        augmented_map = _augmented_feature_map(data.feature_map)
+        augmented_covariates = data.covariates.assign(
+            propensity_score=propensity_scores
+        )
+        augmented_pca, augmented_pca_n, augmented_pca_variance = _pca_coordinates(
+            augmented_features
+        )
+        methods.extend(
+            [
+                (
+                    "identity_ps_augmented_generalized_mahalanobis",
+                    _mahalanobis_coordinates(augmented_features),
+                    None,
+                ),
+                (
+                    "pca_ps_augmented_mahalanobis",
+                    augmented_pca,
+                    {
+                        "pca_components_n": float(augmented_pca_n),
+                        "pca_cumulative_variance": augmented_pca_variance,
+                    },
+                ),
+            ]
+        )
+        augmented_fields = [*source_fields, "propensity_score"]
+        augmented_weights = _load_field_weights(
+            ps_augmented_weights_json, augmented_fields
+        )
+        augmented_column_weights = _expand_field_weights(
+            augmented_map,
+            augmented_weights,
+            [*data.encoded_covariates.columns, "propensity_score"],
+        )
+        methods.append(
+            (
+                "llm_weighted_ps_augmented_generalized_mahalanobis",
+                _mahalanobis_coordinates(augmented_features, augmented_column_weights),
+                {
+                    "llm_field_weight_mean": float(
+                        np.mean(list(augmented_weights.values()))
+                    ),
+                    "propensity_score_weight": augmented_weights["propensity_score"],
+                },
+            )
+        )
+
     rows = [
         _evaluate_method(
             method,
@@ -324,7 +393,12 @@ def run_replication(
             observed,
             data.realized_satt,
             data.expected_satt,
-            data.covariates,
+            (
+                augmented_covariates
+                if method.endswith("ps_augmented_generalized_mahalanobis")
+                or method == "pca_ps_augmented_mahalanobis"
+                else data.covariates
+            ) if ps_augmented_weights_json is not None else data.covariates,
             extra,
         )
         for method, coordinates, extra in methods
@@ -344,7 +418,7 @@ def run_replication(
             }
         ]
     )
-    return method_results, references, data.feature_map
+    return method_results, references, data.feature_map, augmented_map
 
 
 def _parse_args() -> argparse.Namespace:
@@ -358,6 +432,14 @@ def _parse_args() -> argparse.Namespace:
         "--weights-json",
         type=Path,
         help="Optional JSON with one nonnegative weight for each x_1 through x_58",
+    )
+    parser.add_argument(
+        "--ps-augmented-weights-json",
+        type=Path,
+        help=(
+            "Optional JSON with weights for x_1 through x_58 plus propensity_score; "
+            "enables identity, PCA, and LLM PS-augmented matching"
+        ),
     )
     parser.add_argument(
         "--output-dir",
@@ -387,12 +469,20 @@ def main() -> None:
         raise FileExistsError(f"Refusing to overwrite existing output: {output_dir}")
     output_dir.mkdir(parents=True)
 
-    results, references, feature_map = run_replication(
-        args.setting, args.replication, args.data_dir, args.weights_json
+    results, references, feature_map, augmented_map = run_replication(
+        args.setting,
+        args.replication,
+        args.data_dir,
+        args.weights_json,
+        args.ps_augmented_weights_json,
     )
     results.to_csv(output_dir / "complete_information.csv", index=False)
     references.to_csv(output_dir / "replication_reference.csv", index=False)
     feature_map.to_csv(output_dir / "feature_map.csv", index=False)
+    if augmented_map is not None:
+        augmented_map.to_csv(
+            output_dir / "ps_augmented_feature_map.csv", index=False
+        )
     results.groupby("method", as_index=False).agg(
         matched_att=("matched_att", "mean"),
         matched_att_cluster_se=("matched_att_cluster_se", "mean"),
