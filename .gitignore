@@ -10,6 +10,8 @@ data/
 # CDC pilot outputs and scheduler logs
 /cdc natality/results/weight_search_pilots/*
 !/cdc natality/results/weight_search_pilots/.gitkeep
+/cdc natality/results/ate_matching/*
+!/cdc natality/results/ate_matching/.gitkeep
 /cdc natality/logs/*
 !/cdc natality/logs/.gitkeep
 

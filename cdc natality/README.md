@@ -123,6 +123,29 @@ Each run writes a timestamped directory under
 validation scores, selected weights, test estimates, and run metadata are
 separate files there.
 
+## ATE analysis
+
+`src/run_ate_matching_experiment.py` is a separate ATE runner; the existing
+matching runner continues to estimate ATT. Matching ATE uses bidirectional
+nearest-neighbor imputation: match treated births to controls for ATT and
+controls to treated births for ATC, then weight those estimates by the treated
+and control proportions. The runner also reports a reference AIPW-ATE with
+overlap and effective-sample-size diagnostics. The AIPW estimate is a reference,
+not known ground truth. Matched-estimate uncertainty intervals are not currently
+computed.
+
+After the singleton cohort is present at the default `data/processed` path and
+the repository is on SCC, run a 100,000-row code/timing pilot:
+
+```bash
+qsub jobs/ate_matching.sge --pilot-rows 100000 --repeats 1
+```
+
+For the full cohort, omit `--pilot-rows`; the default is five repeated
+99% reference / 1% test splits. Add `--include-ps-covariate` to also evaluate
+identity, PCA, and LLM-weighted methods on the covariates-plus-propensity-score
+representation.
+
 Python dependencies are listed in the repository-root `requirements.txt`.
 Install them from the repository root with:
 

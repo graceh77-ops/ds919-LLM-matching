@@ -1,0 +1,17 @@
+#!/bin/bash -l
+# Submit from "cdc natality": qsub jobs/ate_matching.sge [ATE runner options]
+#$ -N natality_ate
+#$ -cwd
+#$ -V
+#$ -pe omp 1
+#$ -l h_rt=120:00:00
+#$ -l mem_per_core=8G
+#$ -o logs/ate_matching.$JOB_ID.out
+#$ -e logs/ate_matching.$JOB_ID.err
+
+set -euo pipefail
+module load python3
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+python src/run_ate_matching_experiment.py "$@"
