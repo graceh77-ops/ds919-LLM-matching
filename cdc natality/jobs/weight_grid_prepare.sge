@@ -1,0 +1,17 @@
+#!/bin/bash -l
+# Submit from "cdc natality": qsub jobs/weight_grid_prepare.sge [prepare options]
+#$ -N natality_grid_prep
+#$ -cwd
+#$ -V
+#$ -pe omp 1
+#$ -l h_rt=24:00:00
+#$ -l mem_per_core=8G
+#$ -o logs/weight_grid_prepare.$JOB_ID.out
+#$ -e logs/weight_grid_prepare.$JOB_ID.err
+
+set -euo pipefail
+module load python3
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+python src/prepare_weight_grid_pilot.py "$@"

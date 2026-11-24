@@ -123,6 +123,39 @@ Each run writes a timestamped directory under
 validation scores, selected weights, test estimates, and run metadata are
 separate files there.
 
+### Sharded full-vector grid benchmark
+
+`src/prepare_weight_grid_pilot.py`, `src/run_weight_grid_shard.py`, and
+`src/merge_weight_grid_shards.py` implement a disjoint prefix-sharded grid.
+Preparation writes one shared 60/20/20 pilot split. Each shard scores its
+assigned full-vector multiplier combinations on train and validation. The
+merge step refuses to evaluate test until every shard has completed, then
+evaluates the global validation winner once. With 12 weight dimensions and five
+multipliers, the complete grid has 244,140,625 candidates; benchmark a shard
+before deciding whether the full search fits the available compute budget.
+
+After pulling the code on SCC, submit preparation from this directory:
+
+```bash
+mkdir -p logs
+qsub jobs/weight_grid_prepare.sge \
+  --pilot-rows 30000 --seed 919 \
+  --weights-json results/ps_augmented_matching/deepseek_api/20261102T060435Z/weights.json \
+  --output-dir results/weight_search_pilots/grid12d_benchmark_20261124
+```
+
+After preparation finishes, benchmark shard 0 (25 candidates):
+
+```bash
+qsub -t 1-1 jobs/weight_grid_shard.sge \
+  --prepared-dir results/weight_search_pilots/grid12d_benchmark_20261124 \
+  --prefix-dimensions 10
+```
+
+Read `shards/prefix10_shard00000000/shard_summary.json` for candidate timing
+and validation scores. A full-array plan should be chosen only after using that
+measurement to estimate runtime and storage.
+
 Python dependencies are listed in the repository-root `requirements.txt`.
 Install them from the repository root with:
 
