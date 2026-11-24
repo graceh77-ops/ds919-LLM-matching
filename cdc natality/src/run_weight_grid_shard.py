@@ -9,9 +9,9 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-
 from run_weight_search_pilot import _score
+
+STARTS = ("identity", "llm")
 
 
 def _unrank_product(index: int, radix: int, length: int) -> list[int]:
@@ -32,6 +32,7 @@ def _atomic_json(path: Path, value: dict[str, Any]) -> None:
 
 def _candidate(
     manifest: dict[str, Any],
+    start_name: str,
     prefix_digits: list[int],
     suffix_digits: list[int],
     multipliers: list[float],
@@ -41,9 +42,11 @@ def _candidate(
     multiplier_by_field = {
         field: float(multipliers[digit]) for field, digit in zip(fields, digits)
     }
-    weights = {
-        field: float(value) for field, value in manifest["starting_weights"].items()
-    }
+    weights = (
+        {field: 1.0 for field in manifest["starting_weights"]}
+        if start_name == "identity"
+        else {field: float(value) for field, value in manifest["starting_weights"].items()}
+    )
     for field, multiplier in multiplier_by_field.items():
         weights[field] *= multiplier
     return weights, multiplier_by_field
@@ -92,6 +95,7 @@ def main() -> int:
         "prefix_dimensions": args.prefix_dimensions,
         "shard_index": args.shard_index,
         "candidate_count": candidates_in_shard,
+        "starts": list(STARTS),
     }
     if args.resume:
         if not checkpoint_path.is_file():
@@ -108,9 +112,9 @@ def main() -> int:
             "status": "running",
             "signature": signature,
             "next_suffix_index": 0,
-            "best": None,
-            "training_evaluation_seconds_sum": 0.0,
-            "validation_evaluation_seconds_sum": 0.0,
+            "best_by_start": {name: None for name in STARTS},
+            "training_evaluation_seconds_sum_by_start": {name: 0.0 for name in STARTS},
+            "validation_evaluation_seconds_sum_by_start": {name: 0.0 for name in STARTS},
             "started_at_epoch": time.time(),
         }
         _atomic_json(checkpoint_path, state)
@@ -129,24 +133,23 @@ def main() -> int:
     batches_completed = 0
     print(
         f"Shard {args.shard_index + 1}/{shard_count}: prefix={prefix_multipliers}; "
-        f"candidates={candidates_in_shard:,}; starting at {suffix_start:,}.",
+        f"combinations={candidates_in_shard:,}; weight vectors={2 * candidates_in_shard:,}; "
+        f"starting at combination {suffix_start:,}.",
         flush=True,
     )
 
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         while suffix_start < candidates_in_shard:
             suffix_end = min(suffix_start + batch_size, candidates_in_shard)
-            weight_batch: list[dict[str, float]] = []
             multiplier_batch: list[dict[str, float]] = []
             index_batch: list[int] = []
             for suffix_index in range(suffix_start, suffix_end):
                 suffix_digits = _unrank_product(
                     suffix_index, len(multipliers), suffix_dimensions
                 ) if suffix_dimensions else []
-                weights, multiplier_by_field = _candidate(
-                    manifest, prefix_digits, suffix_digits, multipliers
+                _, multiplier_by_field = _candidate(
+                    manifest, "llm", prefix_digits, suffix_digits, multipliers
                 )
-                weight_batch.append(weights)
                 multiplier_batch.append(multiplier_by_field)
                 index_batch.append(args.shard_index * candidates_in_shard + suffix_index)
 
@@ -156,36 +159,46 @@ def main() -> int:
                 score = _score(train, weights)
                 return score, time.perf_counter() - tick
 
-            train_results = list(pool.map(evaluate_one, weight_batch))
-
             def evaluate_validation(item):
                 tick = time.perf_counter()
                 score = _score(validation, item)
                 return score, time.perf_counter() - tick
 
-            validation_results = list(pool.map(evaluate_validation, weight_batch))
-            for i, (weights, multipliers_for_candidate) in enumerate(zip(weight_batch, multiplier_batch)):
-                train_score, train_seconds = train_results[i]
-                validation_score, validation_seconds = validation_results[i]
-                row = {
-                    "candidate_index": index_batch[i],
-                    "multipliers": multipliers_for_candidate,
-                    "weights": weights,
-                    "training_gap_g": float(train_score),
-                    "validation_gap_g": float(validation_score),
-                    "training_evaluation_seconds": float(train_seconds),
-                    "validation_evaluation_seconds": float(validation_seconds),
-                }
-                best = state.get("best")
-                order = (row["validation_gap_g"], row["training_gap_g"], row["candidate_index"])
-                if best is None or order < (
-                    float(best["validation_gap_g"]),
-                    float(best["training_gap_g"]),
-                    int(best["candidate_index"]),
-                ):
-                    state["best"] = row
-                state["training_evaluation_seconds_sum"] += train_seconds
-                state["validation_evaluation_seconds_sum"] += validation_seconds
+            for start_name in STARTS:
+                start_weights = []
+                for suffix_index in range(suffix_start, suffix_end):
+                    suffix_digits = _unrank_product(
+                        suffix_index, len(multipliers), suffix_dimensions
+                    ) if suffix_dimensions else []
+                    candidate_weights, _ = _candidate(
+                        manifest, start_name, prefix_digits, suffix_digits, multipliers
+                    )
+                    start_weights.append(candidate_weights)
+                train_results = list(pool.map(evaluate_one, start_weights))
+                validation_results = list(pool.map(evaluate_validation, start_weights))
+                for i, (weights, multipliers_for_candidate) in enumerate(zip(start_weights, multiplier_batch)):
+                    train_score, train_seconds = train_results[i]
+                    validation_score, validation_seconds = validation_results[i]
+                    row = {
+                        "start": start_name,
+                        "candidate_index": index_batch[i],
+                        "multipliers": multipliers_for_candidate,
+                        "weights": weights,
+                        "training_gap_g": float(train_score),
+                        "validation_gap_g": float(validation_score),
+                        "training_evaluation_seconds": float(train_seconds),
+                        "validation_evaluation_seconds": float(validation_seconds),
+                    }
+                    best = state["best_by_start"].get(start_name)
+                    order = (row["validation_gap_g"], row["training_gap_g"], row["candidate_index"])
+                    if best is None or order < (
+                        float(best["validation_gap_g"]),
+                        float(best["training_gap_g"]),
+                        int(best["candidate_index"]),
+                    ):
+                        state["best_by_start"][start_name] = row
+                    state["training_evaluation_seconds_sum_by_start"][start_name] += train_seconds
+                    state["validation_evaluation_seconds_sum_by_start"][start_name] += validation_seconds
 
             state["next_suffix_index"] = suffix_end
             batches_completed += 1
@@ -196,7 +209,9 @@ def main() -> int:
             if batches_completed % args.checkpoint_every == 0 or suffix_end == candidates_in_shard:
                 print(
                     f"Shard {args.shard_index}: {suffix_end:,}/{candidates_in_shard:,} "
-                    f"candidates; best validation gap={state['best']['validation_gap_g']:.4f} g.",
+                    f"combinations; best validation gaps: "
+                    f"identity={state['best_by_start']['identity']['validation_gap_g']:.4f} g, "
+                    f"llm={state['best_by_start']['llm']['validation_gap_g']:.4f} g.",
                     flush=True,
                 )
 
@@ -211,10 +226,11 @@ def main() -> int:
             field: multipliers[digit]
             for field, digit in zip(fields[:args.prefix_dimensions], prefix_digits)
         },
-        "best": state["best"],
+        "best_by_start": state["best_by_start"],
         "elapsed_seconds_total": elapsed_before + elapsed,
-        "training_evaluation_seconds_sum": state["training_evaluation_seconds_sum"],
-        "validation_evaluation_seconds_sum": state["validation_evaluation_seconds_sum"],
+        "training_evaluation_seconds_sum_by_start": state["training_evaluation_seconds_sum_by_start"],
+        "validation_evaluation_seconds_sum_by_start": state["validation_evaluation_seconds_sum_by_start"],
+        "weight_vector_evaluations": 2 * candidates_in_shard,
         "completed_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
     _atomic_json(shard_dir / "shard_summary.json", summary)
@@ -223,8 +239,10 @@ def main() -> int:
     state["completed_at_utc"] = summary["completed_at_utc"]
     _atomic_json(checkpoint_path, state)
     print(
-        f"Completed shard {args.shard_index}; {candidates_in_shard:,} candidates; "
-        f"best validation gap={state['best']['validation_gap_g']:.4f} g; "
+        f"Completed shard {args.shard_index}; {candidates_in_shard:,} combinations, "
+        f"{2 * candidates_in_shard:,} weight vectors; "
+        f"best validation gaps: identity={state['best_by_start']['identity']['validation_gap_g']:.4f} g, "
+        f"llm={state['best_by_start']['llm']['validation_gap_g']:.4f} g; "
         f"elapsed={elapsed:.1f}s; output={shard_dir}.",
         flush=True,
     )

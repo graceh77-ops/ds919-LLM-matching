@@ -44,6 +44,8 @@ def main() -> int:
             raise RuntimeError(f"Shard {shard_index} belongs to a different prepared pilot.")
         if summary.get("signature", {}).get("prefix_dimensions") != args.prefix_dimensions:
             raise RuntimeError(f"Shard {shard_index} used a different prefix dimension count.")
+        if summary.get("signature", {}).get("starts") != ["identity", "llm"]:
+            raise RuntimeError(f"Shard {shard_index} did not score both required starts.")
         if int(summary.get("completed_candidate_count", -1)) != suffix_count:
             raise RuntimeError(f"Shard {shard_index} did not score its full candidate allocation.")
         summaries.append(summary)
@@ -57,27 +59,31 @@ def main() -> int:
     if not summaries:
         raise SystemExit("No completed shard results were found.")
 
-    winners = [summary["best"] for summary in summaries]
-    winner = min(
-        winners,
-        key=lambda row: (
-            float(row["validation_gap_g"]),
-            float(row["training_gap_g"]),
-            int(row["candidate_index"]),
-        ),
-    )
+    best_by_start = {}
+    for start_name in ("identity", "llm"):
+        start_winners = [summary["best_by_start"][start_name] for summary in summaries]
+        best_by_start[start_name] = min(
+            start_winners,
+            key=lambda row: (
+                float(row["validation_gap_g"]),
+                float(row["training_gap_g"]),
+                int(row["candidate_index"]),
+            ),
+        )
     _write_csv(
         root / "shard_winners.csv",
         [
             {
                 "shard_index": int(summary["signature"]["shard_index"]),
                 "candidate_count": int(summary["candidate_count"]),
-                "best_candidate_index": int(summary["best"]["candidate_index"]),
-                "training_gap_g": float(summary["best"]["training_gap_g"]),
-                "validation_gap_g": float(summary["best"]["validation_gap_g"]),
-                "multipliers": json.dumps(summary["best"]["multipliers"], sort_keys=True),
+                "start": start_name,
+                "best_candidate_index": int(summary["best_by_start"][start_name]["candidate_index"]),
+                "training_gap_g": float(summary["best_by_start"][start_name]["training_gap_g"]),
+                "validation_gap_g": float(summary["best_by_start"][start_name]["validation_gap_g"]),
+                "multipliers": json.dumps(summary["best_by_start"][start_name]["multipliers"], sort_keys=True),
             }
             for summary in summaries
+            for start_name in ("identity", "llm")
         ],
     )
 
@@ -86,12 +92,16 @@ def main() -> int:
         "prepared_signature": manifest["prepared_signature"],
         "grid_fields": manifest["grid_fields"],
         "multipliers": multipliers,
-        "total_grid_candidates": int(manifest["grid_candidate_count"]),
+        "grid_combinations_per_start": int(manifest["grid_combinations_per_start"]),
+        "total_candidate_weight_vectors": int(manifest["total_candidate_weight_vectors"]),
         "expected_shards": expected_shards,
         "completed_shards": len(summaries),
         "missing_shards": len(missing),
-        "candidate_count_scored": sum(int(row["completed_candidate_count"]) for row in summaries),
-        "best_global_candidate": winner,
+        "grid_combinations_scored": sum(int(row["completed_candidate_count"]) for row in summaries),
+        "weight_vector_evaluations_scored": 2 * sum(
+            int(row["completed_candidate_count"]) for row in summaries
+        ),
+        "best_global_candidate_by_start": best_by_start,
     }
     (root / "grid_winner.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
 
@@ -108,7 +118,8 @@ def main() -> int:
     test_models = {
         "identity_ps_augmented" if use_ps else "identity": {field: 1.0 for field in dimensions},
         "llm_ps_augmented" if use_ps else "llm": llm_weights,
-        "grid_llm_selected": winner["weights"],
+        "grid_identity_selected": best_by_start["identity"]["weights"],
+        "grid_llm_selected": best_by_start["llm"]["weights"],
     }
     if use_ps:
         test_models["identity_covariates_only"] = {field: 1.0 for field in FIELD_ORDER}
@@ -126,8 +137,8 @@ def main() -> int:
     (root / "merged_run_metadata.json").write_text(json.dumps(final, indent=2) + "\n", encoding="utf-8")
     print(
         f"Merged {len(summaries):,}/{expected_shards:,} shards; "
-        f"best validation gap={winner['validation_gap_g']:.4f} g; "
-        f"winner multipliers={json.dumps(winner['multipliers'], sort_keys=True)}.",
+        f"best validation gaps: identity={best_by_start['identity']['validation_gap_g']:.4f} g; "
+        f"llm={best_by_start['llm']['validation_gap_g']:.4f} g.",
         flush=True,
     )
     for row in test_rows:

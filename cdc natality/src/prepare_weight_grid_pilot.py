@@ -104,7 +104,9 @@ def main() -> int:
         },
         "grid_fields": list(fields),
         "multipliers": [float(value) for value in args.multipliers],
-        "grid_candidate_count": len(args.multipliers) ** len(fields),
+        "starts": ["identity", "llm"],
+        "grid_combinations_per_start": len(args.multipliers) ** len(fields),
+        "total_candidate_weight_vectors": 2 * len(args.multipliers) ** len(fields),
         "propensity_score_in_weight_vector": use_ps,
     }
     canonical = json.dumps(manifest, sort_keys=True, separators=(",", ":"))
@@ -113,7 +115,12 @@ def main() -> int:
     manifest["prepared_dir"] = str(output_dir)
     (output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     print(f"Prepared shared pilot splits: {output_dir}", flush=True)
-    print(f"Grid dimensions: {len(fields)}; candidate count: {manifest['grid_candidate_count']:,}", flush=True)
+    print(
+        f"Grid dimensions: {len(fields)}; combinations per start: "
+        f"{manifest['grid_combinations_per_start']:,}; total weight-vector evaluations: "
+        f"{manifest['total_candidate_weight_vectors']:,}.",
+        flush=True,
+    )
     return 0
 
 
