@@ -75,6 +75,23 @@ each covariate in parallel. Override them as needed, for example:
 qsub jobs/experiment.sge --settings 1-10 --starts identity --max-sweeps 2
 ```
 
+To include an estimated propensity-score logit as a 59th search dimension, pass
+`--include-propensity-score`. The score is fit separately within each ACIC
+replication from its treatment assignments and the 79 encoded covariates; ACIC
+files do not supply a propensity score. The identity start gives the added
+dimension weight 1. The LLM start appends the same default weight (override with
+`--propensity-score-start-weight`). A pooled augmented covariance transform is
+fit from training replications only and reused for validation and test. This is
+a separate run; it does not change a job that was already submitted.
+
+For example, use a distinct results directory when submitting the
+propensity-augmented version:
+
+```bash
+qsub jobs/experiment.sge --include-propensity-score \
+  --output-dir results/full_experiment_with_propensity_score
+```
+
 The job script requests four cores and 120 hours. The runner writes an atomic
 `checkpoint.json` after each completed covariate and test model. If the job is
 interrupted, submit again with the same output directory and `--resume` to

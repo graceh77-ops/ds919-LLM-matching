@@ -31,6 +31,7 @@ if str(ACIC_SOURCE) not in sys.path:
 from load_acic_replication import encode_covariates  # noqa: E402
 from run_matching_experiment import (  # noqa: E402
     _balance_metrics,
+    _augmented_feature_map,
     _mahalanobis_coordinates,
     _matching_indices,
     _pca_coordinates,
@@ -40,6 +41,7 @@ from run_matching_experiment import (  # noqa: E402
 DEFAULT_CONFIG = PROJECT_ROOT / "acic2016_weight_search" / "config" / "experiment.json"
 REPLICATION_PATTERN = re.compile(r"^zymu_(\d+)\.csv$")
 OUTCOME_COLUMNS = ("z", "y0", "y1")
+PROPENSITY_SCORE_FIELD = "propensity_score"
 _CANDIDATE_WORKER_CONTEXT = None
 
 
@@ -195,6 +197,87 @@ def field_column_weights(feature_map, encoded_columns, field_weights):
     return expanded
 
 
+def _inverse_sqrt_covariance(features: np.ndarray) -> np.ndarray:
+    covariance = np.cov(features, rowvar=False, ddof=1)
+    eigenvalues, eigenvectors = np.linalg.eigh(covariance)
+    largest = float(eigenvalues[-1])
+    if not np.isfinite(largest) or largest <= 0:
+        raise ValueError("Augmented feature covariance has no positive finite eigenvalue")
+    eigenvalues = np.maximum(eigenvalues, 1e-8 * largest)
+    return (eigenvectors * (1.0 / np.sqrt(eigenvalues))) @ eigenvectors.T
+
+
+def _weighted_mahalanobis_coordinates(
+    features: np.ndarray,
+    diagonal_weights: np.ndarray,
+    inverse_root: np.ndarray,
+) -> np.ndarray:
+    weighted_metric = inverse_root @ np.diag(diagonal_weights) @ inverse_root
+    weighted_metric = (weighted_metric + weighted_metric.T) / 2.0
+    values, vectors = np.linalg.eigh(weighted_metric)
+    factor = vectors * np.sqrt(np.maximum(values, 0.0))
+    return features @ factor
+
+
+def _fit_propensity_score_cache(
+    outcomes: Sequence[ReplicationOutcome],
+    features: np.ndarray,
+    workers: int,
+) -> dict[tuple[int, str], np.ndarray]:
+    """Fit and cache one treatment logit per replication, reused across candidates."""
+    def fit_one(item: ReplicationOutcome):
+        return (item.setting, item.filename), _propensity_logits(features, item.treatment)
+
+    if workers <= 1:
+        fitted = map(fit_one, outcomes)
+    else:
+        pool = ThreadPoolExecutor(max_workers=workers)
+        try:
+            fitted = list(pool.map(fit_one, outcomes))
+        finally:
+            pool.shutdown(wait=True)
+    return dict(fitted)
+
+
+def _fit_augmented_inverse_root(
+    outcomes: Sequence[ReplicationOutcome],
+    features: np.ndarray,
+    propensity_logits: Mapping[tuple[int, str], np.ndarray],
+) -> np.ndarray:
+    """Fit one pooled augmented covariance using training replications only."""
+    if not outcomes:
+        raise ValueError("Cannot fit the augmented covariance without training replications.")
+    replication_count = len(outcomes)
+    row_count = len(features) * replication_count
+    x_sum = replication_count * features.sum(axis=0)
+    x_cross = replication_count * (features.T @ features)
+    score_sum = 0.0
+    score_square_sum = 0.0
+    x_score_cross = np.zeros(features.shape[1], dtype=np.float64)
+    for item in outcomes:
+        score = propensity_logits[(item.setting, item.filename)].reshape(-1)
+        if score.shape != (len(features),):
+            raise ValueError("Cached propensity scores do not align with ACIC covariates.")
+        score_sum += float(score.sum())
+        score_square_sum += float(np.dot(score, score))
+        x_score_cross += features.T @ score
+
+    cross_product = np.empty((features.shape[1] + 1, features.shape[1] + 1), dtype=np.float64)
+    cross_product[:-1, :-1] = x_cross
+    cross_product[:-1, -1] = x_score_cross
+    cross_product[-1, :-1] = x_score_cross
+    cross_product[-1, -1] = score_square_sum
+    total_sum = np.concatenate((x_sum, [score_sum]))
+    covariance = (cross_product - np.outer(total_sum, total_sum) / row_count) / (row_count - 1)
+    covariance = (covariance + covariance.T) / 2.0
+    eigenvalues, eigenvectors = np.linalg.eigh(covariance)
+    largest = float(eigenvalues[-1])
+    if not np.isfinite(largest) or largest <= 0:
+        raise ValueError("Training augmented covariance has no positive eigenvalue.")
+    eigenvalues = np.maximum(eigenvalues, largest * 1e-8)
+    return (eigenvectors * (1.0 / np.sqrt(eigenvalues))) @ eigenvectors.T
+
+
 def evaluate_coordinates(
     outcomes: Sequence[ReplicationOutcome],
     covariates: pd.DataFrame,
@@ -248,8 +331,29 @@ def evaluate_weights(
     *,
     diagnostics: bool = False,
     executor: ThreadPoolExecutor | None = None,
+    propensity_score_cache: Mapping[tuple[int, str], np.ndarray] | None = None,
+    augmented_inverse_root: np.ndarray | None = None,
 ) -> tuple[float, list[dict[str, object]]]:
     del fields  # Source-field completeness is validated when loading the starts.
+    if PROPENSITY_SCORE_FIELD in weights:
+        if propensity_score_cache is None or augmented_inverse_root is None:
+            raise ValueError("Propensity-score weights require cached scores and a training covariance.")
+        augmented_map = _augmented_feature_map(feature_map)
+        columns = list(augmented_map["encoded_column"])
+        column_weights = field_column_weights(augmented_map, columns, weights)
+
+        def augmented_coordinates(item: ReplicationOutcome) -> np.ndarray:
+            score = propensity_score_cache[(item.setting, item.filename)].reshape(-1, 1)
+            augmented_features = np.column_stack((features, score))
+            return _weighted_mahalanobis_coordinates(
+                augmented_features, column_weights, augmented_inverse_root
+            )
+
+        return evaluate_coordinates(
+            outcomes, covariates, augmented_coordinates,
+            diagnostics=diagnostics, executor=executor,
+        )
+
     columns = list(feature_map["encoded_column"])
     column_weights = field_column_weights(feature_map, columns, weights)
     coordinates = _mahalanobis_coordinates(features, column_weights)
@@ -262,22 +366,34 @@ def evaluate_weights(
     )
 
 
-def initialize_candidate_worker(train, covariates, features, feature_map, fields) -> None:
+def initialize_candidate_worker(
+    train, covariates, features, feature_map, fields,
+    propensity_score_cache=None, augmented_inverse_root=None,
+) -> None:
     """Keep read-only score inputs in each worker for candidate-level parallelism."""
     global _CANDIDATE_WORKER_CONTEXT
-    _CANDIDATE_WORKER_CONTEXT = (train, covariates, features, feature_map, fields)
+    _CANDIDATE_WORKER_CONTEXT = (
+        train, covariates, features, feature_map, fields,
+        propensity_score_cache, augmented_inverse_root,
+    )
 
 
 def score_candidate_worker(weights: dict[str, float]) -> tuple[float, float]:
     started = time.perf_counter()
-    train, covariates, features, feature_map, fields = _CANDIDATE_WORKER_CONTEXT
+    train, covariates, features, feature_map, fields, propensity_cache, inverse_root = _CANDIDATE_WORKER_CONTEXT
     rmse, _ = evaluate_weights(
-        train, covariates, features, feature_map, fields, weights
+        train, covariates, features, feature_map, fields, weights,
+        propensity_score_cache=propensity_cache,
+        augmented_inverse_root=inverse_root,
     )
     return rmse, time.perf_counter() - started
 
 
-def load_llm_weights(path: Path, fields: Sequence[str]) -> dict[str, float]:
+def load_llm_weights(
+    path: Path,
+    fields: Sequence[str],
+    propensity_score_start_weight: float | None = None,
+) -> dict[str, float]:
     with path.open("r", encoding="utf-8-sig") as stream:
         raw = json.load(stream)
     if not isinstance(raw, dict) or set(raw) != set(fields):
@@ -285,6 +401,10 @@ def load_llm_weights(path: Path, fields: Sequence[str]) -> dict[str, float]:
     weights = {field: float(raw[field]) for field in fields}
     if not np.isfinite(list(weights.values())).all() or min(weights.values()) <= 0:
         raise ValueError("LLM starting weights must be finite and positive")
+    if propensity_score_start_weight is not None:
+        if not np.isfinite(propensity_score_start_weight) or propensity_score_start_weight <= 0:
+            raise ValueError("Propensity-score starting weight must be finite and positive")
+        weights[PROPENSITY_SCORE_FIELD] = float(propensity_score_start_weight)
     return weights
 
 
@@ -308,7 +428,7 @@ def save_json_atomic(path: Path, content: Mapping[str, object]) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, add_help=False)
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     args, remaining = parser.parse_known_args()
     config_path = args.config.resolve()
@@ -339,6 +459,20 @@ def main() -> None:
     )
     parser.add_argument("--field-set", default=search.get("field_set", "all"))
     parser.add_argument(
+        "--include-propensity-score",
+        action="store_true",
+        help=(
+            "Append a per-replication estimated propensity-score logit as a 59th "
+            "search dimension. Its covariance transform is fit on training replications."
+        ),
+    )
+    parser.add_argument(
+        "--propensity-score-start-weight",
+        type=float,
+        default=1.0,
+        help="Starting weight appended to the identity and LLM vectors (default: 1).",
+    )
+    parser.add_argument(
         "--multipliers", type=float, nargs="+",
         default=search.get("candidate_multipliers", [0.1, 0.5, 1, 2, 10]),
     )
@@ -364,15 +498,20 @@ def main() -> None:
 
     covariates, encoded, feature_map, fields = load_reference_covariates(args.data_dir)
     requested_fields = args.field_set
-    fields_to_search = (
+    covariate_fields_to_search = (
         fields if requested_fields.lower() == "all"
         else [field.strip() for field in requested_fields.split(",") if field.strip()]
     )
-    unknown = set(fields_to_search) - set(fields)
+    unknown = set(covariate_fields_to_search) - set(fields)
     if unknown:
         raise ValueError(f"Unknown source fields: {sorted(unknown)}")
-    if not fields_to_search or len(fields_to_search) != len(set(fields_to_search)):
+    if not covariate_fields_to_search or len(covariate_fields_to_search) != len(set(covariate_fields_to_search)):
         raise ValueError("The searched field set must be nonempty and unique")
+    if not np.isfinite(args.propensity_score_start_weight) or args.propensity_score_start_weight <= 0:
+        raise ValueError("Propensity-score starting weight must be finite and positive")
+    fields_to_search = list(covariate_fields_to_search)
+    if args.include_propensity_score:
+        fields_to_search.append(PROPENSITY_SCORE_FIELD)
     features = encoded.to_numpy(dtype=np.float64)
 
     by_split: dict[str, list[ReplicationOutcome]] = {name: [] for name in ("train", "validation")}
@@ -384,11 +523,31 @@ def main() -> None:
     train = by_split["train"]
     validation = by_split["validation"]
 
+    train_propensity_cache = None
+    validation_propensity_cache = None
+    augmented_inverse_root = None
+    if args.include_propensity_score:
+        print("Fitting per-replication training propensity scores for the added coordinate.", flush=True)
+        train_propensity_cache = _fit_propensity_score_cache(train, features, args.workers)
+        print("Fitting per-replication validation propensity scores.", flush=True)
+        validation_propensity_cache = _fit_propensity_score_cache(validation, features, args.workers)
+        augmented_inverse_root = _fit_augmented_inverse_root(
+            train, features, train_propensity_cache
+        )
+        print("Fitted pooled augmented covariance from training replications.", flush=True)
+
     starts = []
     if args.starts in {"identity", "both"}:
-        starts.append(("identity", {field: 1.0 for field in fields}))
+        starts.append(("identity", {field: 1.0 for field in fields_to_search}))
     if args.starts in {"llm", "both"}:
-        starts.append(("llm", load_llm_weights(args.llm_weights, fields)))
+        starts.append((
+            "llm",
+            load_llm_weights(
+                args.llm_weights,
+                fields,
+                args.propensity_score_start_weight if args.include_propensity_score else None,
+            ),
+        ))
     multipliers = [float(value) for value in args.multipliers]
     if any(value <= 0 for value in multipliers) or 1.0 not in multipliers:
         raise ValueError("Candidate multipliers must be positive and include 1")
@@ -459,7 +618,10 @@ def main() -> None:
             max_workers=candidate_workers,
             mp_context=process_context,
             initializer=initialize_candidate_worker,
-            initargs=(train, covariates, features, feature_map, fields),
+            initargs=(
+                train, covariates, features, feature_map, fields,
+                train_propensity_cache, augmented_inverse_root,
+            ),
         )
 
     starting_weights = state["starting_weights"]
@@ -474,6 +636,8 @@ def main() -> None:
         def train_score(candidate: dict[str, float]) -> float:
             return evaluate_weights(
                 train, covariates, features, feature_map, fields, candidate,
+                propensity_score_cache=train_propensity_cache,
+                augmented_inverse_root=augmented_inverse_root,
             )[0]
 
         def score_candidate_batch(candidates: Sequence[dict[str, float]]):
@@ -489,6 +653,8 @@ def main() -> None:
             validation_rmse, _ = evaluate_weights(
                 validation, covariates, features, feature_map, fields, weights,
                 executor=executor,
+                propensity_score_cache=validation_propensity_cache,
+                augmented_inverse_root=augmented_inverse_root,
             )
             state["checkpoint_weights"].setdefault(start_name, {})[str(sweep)] = dict(weights)
             row = {
@@ -573,6 +739,12 @@ def main() -> None:
         for filename in files_by_setting[setting]
         if assignment[(setting, filename)] == "test"
     ]
+    test_propensity_cache = None
+    if args.include_propensity_score:
+        print("Fitting per-replication test propensity scores for final evaluation.", flush=True)
+        test_propensity_cache = _fit_propensity_score_cache(
+            test_outcomes, features, args.workers
+        )
     test_models: dict[str, dict[str, float]] = {}
     for start_name in state["final_weights"]:
         test_models[f"{start_name}_baseline"] = starting_weights[start_name]
@@ -615,6 +787,8 @@ def main() -> None:
             lambda weights=weights: evaluate_weights(
                 test_outcomes, covariates, features, feature_map, fields, weights,
                 diagnostics=True, executor=executor,
+                propensity_score_cache=test_propensity_cache,
+                augmented_inverse_root=augmented_inverse_root,
             ),
         )
 
@@ -631,7 +805,11 @@ def main() -> None:
         lambda: evaluate_coordinates(
             test_outcomes,
             covariates,
-            lambda item: _propensity_logits(features, item.treatment)[:, None],
+            lambda item: (
+                test_propensity_cache[(item.setting, item.filename)][:, None]
+                if test_propensity_cache is not None
+                else _propensity_logits(features, item.treatment)[:, None]
+            ),
             diagnostics=True,
             executor=executor,
         ),
@@ -679,6 +857,14 @@ def main() -> None:
         },
         "forced_training_files": split_config.get("force_training", []),
         "searched_fields": fields_to_search,
+        "propensity_score_coordinate_included": args.include_propensity_score,
+        "propensity_score_coordinate_definition": (
+            "within-replication unpenalized logistic treatment logit fitted from the 79 encoded ACIC covariates; pooled augmented covariance fit on training replications only"
+            if args.include_propensity_score else None
+        ),
+        "propensity_score_start_weight": (
+            args.propensity_score_start_weight if args.include_propensity_score else None
+        ),
         "starts": list(final_weights),
         "multipliers": multipliers,
         "maximum_sweeps": args.max_sweeps,
