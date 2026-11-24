@@ -7,6 +7,12 @@ data/
 /acic2016_weight_search/logs/*
 !/acic2016_weight_search/logs/.gitkeep
 
+# CDC pilot outputs and scheduler logs
+/cdc natality/results/weight_search_pilots/*
+!/cdc natality/results/weight_search_pilots/.gitkeep
+/cdc natality/logs/*
+!/cdc natality/logs/.gitkeep
+
 # API keys and local settings
 .env
 .env.*

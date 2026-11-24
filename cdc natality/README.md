@@ -99,6 +99,30 @@ workspaces still use RAM, so check available memory before a full run. Reference
 weight and propensity quantiles are estimated from a bounded random sample;
 their sample sizes and approximate status are recorded in the detailed output.
 
+## Coordinate and grid search pilot
+
+The pilot samples 30,000 singleton births, splits them 60/20/20 by
+treatment-by-year strata, and runs coordinate search from identity and current
+PS-augmented LLM weights. Its restricted five-level grid varies
+`CIG0_R`, `MAGER`, and `PROPENSITY_SCORE` around the LLM vector (125 candidates;
+other weights stay fixed). AIPW is the tuning reference, not known causal
+truth. Pilot test results are for code/timing checks, not study conclusions.
+
+From this directory on SCC, after creating `logs/`, submit:
+
+```bash
+qsub jobs/weight_search_pilot.sge --algorithms both --pilot-rows 30000 \
+  --weights-json results/ps_augmented_matching/deepseek_api/20261102T060435Z/weights.json \
+  --grid-fields CIG0_R MAGER PROPENSITY_SCORE --max-sweeps 1 \
+  --multipliers 0.1 0.5 1 2 10
+```
+
+Use `--algorithms coordinate` or `--algorithms grid` to run one search alone.
+Each run writes a timestamped directory under
+`results/weight_search_pilots/`; the coordinate history, grid candidates,
+validation scores, selected weights, test estimates, and run metadata are
+separate files there.
+
 Python dependencies are listed in the repository-root `requirements.txt`.
 Install them from the repository root with:
 

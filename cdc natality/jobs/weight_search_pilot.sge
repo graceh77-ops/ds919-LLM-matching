@@ -1,0 +1,17 @@
+#!/bin/bash -l
+# Submit from "cdc natality": qsub jobs/weight_search_pilot.sge [pilot options]
+#$ -N natality_weight_pilot
+#$ -cwd
+#$ -V
+#$ -pe omp 4
+#$ -l h_rt=24:00:00
+#$ -l mem_per_core=4G
+#$ -o logs/weight_search_pilot.$JOB_ID.out
+#$ -e logs/weight_search_pilot.$JOB_ID.err
+
+set -euo pipefail
+module load python3
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+python src/run_weight_search_pilot.py --workers "${NSLOTS:-1}" "$@"
