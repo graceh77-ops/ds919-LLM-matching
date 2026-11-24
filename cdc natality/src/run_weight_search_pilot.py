@@ -353,7 +353,8 @@ def _grid_search(
             str(row["multipliers"]),
         ),
     )
-    return dict(selected["weights"]), rows
+    selected_weights = json.loads(str(selected["weights"]))
+    return {str(field): float(value) for field, value in selected_weights.items()}, rows
 
 
 def _evaluate_test_models(
