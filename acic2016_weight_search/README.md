@@ -75,6 +75,13 @@ each covariate in parallel. Override them as needed, for example:
 qsub jobs/experiment.sge --settings 1-10 --starts identity --max-sweeps 2
 ```
 
-The job script requests four cores and 72 hours. Use a short parallel timing run
-to refine this walltime estimate before the full experiment.
+The job script requests four cores and 120 hours. The runner writes an atomic
+`checkpoint.json` after each completed covariate and test model. If the job is
+interrupted, submit again with the same output directory and `--resume` to
+continue from the last checkpoint. Use a new output directory for each fresh run:
+
+```bash
+qsub jobs/experiment.sge --output-dir results/full_experiment_checkpointed
+qsub jobs/experiment.sge --output-dir results/full_experiment_checkpointed --resume
+```
 

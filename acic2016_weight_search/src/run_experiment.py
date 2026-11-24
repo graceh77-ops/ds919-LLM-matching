@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import math
 import multiprocessing
@@ -296,6 +297,16 @@ def write_csv(path: Path, rows: Sequence[Mapping[str, object]]) -> None:
         writer.writerows(rows)
 
 
+def save_json_atomic(path: Path, content: Mapping[str, object]) -> None:
+    temporary_path = path.with_name(path.name + ".tmp")
+    with temporary_path.open("w", encoding="utf-8") as stream:
+        json.dump(content, stream, indent=2)
+        stream.write("\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+    temporary_path.replace(path)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
@@ -333,6 +344,11 @@ def main() -> None:
     )
     parser.add_argument("--output-dir", type=Path, default=output_default)
     parser.add_argument("--llm-weights", type=Path, default=llm_default)
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume from checkpoint.json in the existing output directory",
+    )
     args = parser.parse_args(remaining, namespace=argparse.Namespace(**vars(args)))
 
     if args.max_sweeps < 1:
@@ -380,8 +396,58 @@ def main() -> None:
     output_dir = args.output_dir
     if not output_dir.is_absolute():
         output_dir = (Path.cwd() / output_dir).resolve()
-    output_dir.mkdir(parents=True, exist_ok=False)
-    write_csv(output_dir / "split_manifest.csv", split_rows)
+    starting_weights = {name: dict(weights) for name, weights in starts}
+    run_signature = {
+        "data_dir": str(args.data_dir.resolve()),
+        "settings": settings,
+        "seed": args.seed,
+        "searched_fields": fields_to_search,
+        "starting_weights": starting_weights,
+        "multipliers": multipliers,
+        "max_sweeps": args.max_sweeps,
+        "split_manifest_sha256": hashlib.sha256(
+            json.dumps(split_rows, sort_keys=True).encode("utf-8")
+        ).hexdigest(),
+    }
+    checkpoint_path = output_dir / "checkpoint.json"
+    if args.resume:
+        if not output_dir.is_dir() or not checkpoint_path.is_file():
+            raise SystemExit(f"Cannot resume: no checkpoint found in {output_dir}")
+        with checkpoint_path.open("r", encoding="utf-8") as stream:
+            state = json.load(stream)
+        if state.get("run_signature") != run_signature:
+            raise SystemExit(
+                "Cannot resume: this output folder was created with different "
+                "data, weights, split, or search options"
+            )
+        if state.get("status") == "completed":
+            raise SystemExit(f"This experiment is already complete: {output_dir}")
+    else:
+        output_dir.mkdir(parents=True, exist_ok=False)
+        write_csv(output_dir / "split_manifest.csv", split_rows)
+        state = {
+            "format_version": 1,
+            "run_signature": run_signature,
+            "status": "searching",
+            "current_start": None,
+            "completed_starts": [],
+            "search_progress": {},
+            "history_by_start": {},
+            "validation_rows": [],
+            "checkpoint_weights": {},
+            "selection_rows": [],
+            "final_weights": {},
+            "starting_weights": starting_weights,
+            "test_rows": [],
+            "test_summary_rows": [],
+            "completed_test_models": [],
+            "timings": {},
+        }
+        save_json_atomic(checkpoint_path, state)
+
+    def save_checkpoint() -> None:
+        save_json_atomic(checkpoint_path, state)
+
     executor = ThreadPoolExecutor(max_workers=args.workers) if args.workers > 1 else None
     candidate_workers = min(4, args.workers, len(multipliers))
     candidate_pool = None
@@ -396,16 +462,15 @@ def main() -> None:
             initargs=(train, covariates, features, feature_map, fields),
         )
 
-    history: list[dict[str, object]] = []
-    validation_rows: list[dict[str, object]] = []
-    checkpoint_weights: dict[str, dict[str, dict[str, float]]] = {}
-    selection_rows: list[dict[str, object]] = []
-    final_weights: dict[str, dict[str, float]] = {}
-    starting_weights = {name: dict(weights) for name, weights in starts}
-    test_rows: list[dict[str, object]] = []
-    timings: dict[str, float] = {}
+    starting_weights = state["starting_weights"]
 
     for start_name, initial_weights in starts:
+        if start_name in state["completed_starts"]:
+            continue
+        state["current_start"] = start_name
+        state["status"] = "searching"
+        save_checkpoint()
+
         def train_score(candidate: dict[str, float]) -> float:
             return evaluate_weights(
                 train, covariates, features, feature_map, fields, candidate,
@@ -420,22 +485,23 @@ def main() -> None:
                 return results
             return list(candidate_pool.map(score_candidate_worker, candidates))
 
-        checkpoints: list[tuple[int, dict[str, float], float]] = []
-        checkpoint_weights[start_name] = {}
-
         def record_checkpoint(sweep: int, weights: dict[str, float], train_rmse: float) -> None:
             validation_rmse, _ = evaluate_weights(
                 validation, covariates, features, feature_map, fields, weights,
                 executor=executor,
             )
-            checkpoints.append((sweep, dict(weights), validation_rmse))
-            checkpoint_weights[start_name][str(sweep)] = dict(weights)
-            validation_rows.append({
+            state["checkpoint_weights"].setdefault(start_name, {})[str(sweep)] = dict(weights)
+            row = {
                 "start": start_name,
                 "sweep": sweep,
                 "training_rmse": train_rmse,
                 "validation_rmse": validation_rmse,
-            })
+            }
+            state["validation_rows"] = [
+                existing for existing in state["validation_rows"]
+                if not (existing["start"] == start_name and int(existing["sweep"]) == sweep)
+            ]
+            state["validation_rows"].append(row)
             print(
                 f"{start_name}: completed through sweep {sweep}; "
                 f"training RMSE={train_rmse:.6f}, validation RMSE={validation_rmse:.6f}",
@@ -449,6 +515,11 @@ def main() -> None:
                 flush=True,
             )
 
+        def save_search_progress(progress: dict[str, object]) -> None:
+            state["search_progress"][start_name] = progress
+            state["history_by_start"][start_name] = progress["history"]
+            save_checkpoint()
+
         started = time.perf_counter()
         _, _, search_history = coordinate_search(
             initial_weights,
@@ -460,21 +531,40 @@ def main() -> None:
             on_sweep=record_checkpoint,
             on_coordinate=log_coordinate,
             score_candidates=score_candidate_batch,
+            resume_state=state["search_progress"].get(start_name),
+            on_progress=save_search_progress,
         )
-        timings[f"{start_name}_training_search_seconds"] = time.perf_counter() - started
-        history.extend(search_history)
-        selected_sweep, selected_weights, selected_validation_rmse = min(
-            checkpoints, key=lambda item: (item[2], item[0])
+        state["history_by_start"][start_name] = search_history
+        timing_key = f"{start_name}_training_search_seconds"
+        state["timings"][timing_key] = (
+            float(state["timings"].get(timing_key, 0.0))
+            + time.perf_counter() - started
         )
-        selection_rows.append({
+        checkpoints = [
+            row for row in state["validation_rows"] if row["start"] == start_name
+        ]
+        selected = min(
+            checkpoints,
+            key=lambda row: (float(row["validation_rmse"]), int(row["sweep"])),
+        )
+        selected_sweep = int(selected["sweep"])
+        selected_weights = state["checkpoint_weights"][start_name][str(selected_sweep)]
+        selection_row = {
             "start": start_name,
             "selected_sweeps": selected_sweep,
-            "validation_rmse": selected_validation_rmse,
-        })
+            "validation_rmse": float(selected["validation_rmse"]),
+        }
+        state["selection_rows"] = [
+            row for row in state["selection_rows"] if row["start"] != start_name
+        ]
+        state["selection_rows"].append(selection_row)
 
         # Use the validation-selected training checkpoint directly; no refit on
         # train plus validation is performed in this compute-conscious plan.
-        final_weights[start_name] = selected_weights
+        state["final_weights"][start_name] = selected_weights
+        state["completed_starts"].append(start_name)
+        state["current_start"] = None
+        save_checkpoint()
 
     # Test outcomes are loaded only after both search procedures and sweep selection are frozen.
     test_outcomes = [
@@ -483,18 +573,22 @@ def main() -> None:
         for filename in files_by_setting[setting]
         if assignment[(setting, filename)] == "test"
     ]
-    test_summary_rows: list[dict[str, object]] = []
     test_models: dict[str, dict[str, float]] = {}
-    for start_name in final_weights:
+    for start_name in state["final_weights"]:
         test_models[f"{start_name}_baseline"] = starting_weights[start_name]
-        if final_weights[start_name] != starting_weights[start_name]:
-            test_models[f"{start_name}_searched"] = final_weights[start_name]
+        if state["final_weights"][start_name] != starting_weights[start_name]:
+            test_models[f"{start_name}_searched"] = state["final_weights"][start_name]
+    state["status"] = "testing"
+    save_checkpoint()
+
     def record_test_model(model_name: str, evaluator) -> None:
+        if model_name in state["completed_test_models"]:
+            return
         started = time.perf_counter()
         test_rmse, rows = evaluator()
-        timings[f"{model_name}_test_evaluation_seconds"] = time.perf_counter() - started
-        test_rows.extend({"model": model_name, **row} for row in rows)
-        test_summary_rows.append({
+        state["timings"][f"{model_name}_test_evaluation_seconds"] = time.perf_counter() - started
+        state["test_rows"].extend({"model": model_name, **row} for row in rows)
+        state["test_summary_rows"].append({
             "model": model_name,
             "scope": "overall",
             "setting": "all",
@@ -504,7 +598,7 @@ def main() -> None:
         })
         for setting in settings:
             setting_rows = [row for row in rows if row["setting"] == setting]
-            test_summary_rows.append({
+            state["test_summary_rows"].append({
                 "model": model_name,
                 "scope": "setting",
                 "setting": setting,
@@ -512,6 +606,8 @@ def main() -> None:
                 "mean_abs_error": float(np.mean([abs(row["error"]) for row in setting_rows])),
                 "mean_max_abs_smd_after": float(np.mean([row["max_abs_smd_after"] for row in setting_rows])),
             })
+        state["completed_test_models"].append(model_name)
+        save_checkpoint()
 
     for model_name, weights in test_models.items():
         record_test_model(
@@ -545,6 +641,18 @@ def main() -> None:
         candidate_pool.shutdown(wait=True)
     if executor is not None:
         executor.shutdown(wait=True)
+
+    history = [
+        row for start_name, _ in starts
+        for row in state["history_by_start"].get(start_name, [])
+    ]
+    validation_rows = state["validation_rows"]
+    selection_rows = state["selection_rows"]
+    checkpoint_weights = state["checkpoint_weights"]
+    final_weights = state["final_weights"]
+    test_rows = state["test_rows"]
+    test_summary_rows = state["test_summary_rows"]
+    timings = state["timings"]
 
     write_csv(output_dir / "search_history.csv", history)
     write_csv(output_dir / "validation_sweep_metrics.csv", validation_rows)
@@ -588,6 +696,9 @@ def main() -> None:
     with (output_dir / "run_metadata.json").open("w", encoding="utf-8") as stream:
         json.dump(metadata, stream, indent=2)
         stream.write("\n")
+    state["status"] = "completed"
+    state["current_start"] = None
+    save_checkpoint()
     print(f"Experiment outputs: {output_dir}", flush=True)
     for row in test_summary_rows:
         if row["scope"] == "overall":

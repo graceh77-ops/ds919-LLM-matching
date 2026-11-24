@@ -21,6 +21,8 @@ def coordinate_search(
     on_sweep: Callable[[int, dict[str, float], float], None] | None = None,
     on_coordinate: Callable[[int, str, float], None] | None = None,
     score_candidates: CandidateBatchScorer | None = None,
+    resume_state: Mapping[str, object] | None = None,
+    on_progress: Callable[[dict[str, object]], None] | None = None,
 ) -> tuple[dict[str, float], float, list[dict[str, object]]]:
     """Optimize one field at a time, retaining accepted updates between fields.
 
@@ -45,26 +47,52 @@ def coordinate_search(
     if max_sweeps < 1:
         raise ValueError("max_sweeps must be at least 1")
 
-    started = perf_counter()
-    current_score = float(score(dict(weights)))
-    if current_score < 0:
-        raise ValueError("score must be a nonnegative RMSE")
-    history: list[dict[str, object]] = [{
-        "start": start_name,
-        "sweep": 0,
-        "field": "__initial__",
-        "multiplier": 1.0,
-        "candidate_weight": None,
-        "rmse": current_score,
-        "accepted": True,
-        "evaluation_seconds": perf_counter() - started,
-    }]
-    if on_sweep is not None:
-        on_sweep(0, dict(weights), current_score)
-
-    for sweep in range(1, max_sweeps + 1):
+    if resume_state is None:
+        started = perf_counter()
+        current_score = float(score(dict(weights)))
+        if current_score < 0:
+            raise ValueError("score must be a nonnegative RMSE")
+        history: list[dict[str, object]] = [{
+            "start": start_name,
+            "sweep": 0,
+            "field": "__initial__",
+            "multiplier": 1.0,
+            "candidate_weight": None,
+            "rmse": current_score,
+            "accepted": True,
+            "evaluation_seconds": perf_counter() - started,
+        }]
+        sweep = 1
+        field_index = 0
         any_update = False
-        for field in fields:
+        done = False
+        if on_sweep is not None:
+            on_sweep(0, dict(weights), current_score)
+        if on_progress is not None:
+            on_progress({
+                "weights": dict(weights),
+                "current_score": current_score,
+                "sweep": sweep,
+                "next_field_index": field_index,
+                "any_update": any_update,
+                "done": done,
+                "history": history,
+            })
+    else:
+        weights = {
+            str(field): float(value)
+            for field, value in resume_state["weights"].items()
+        }
+        current_score = float(resume_state["current_score"])
+        sweep = int(resume_state["sweep"])
+        field_index = int(resume_state["next_field_index"])
+        any_update = bool(resume_state["any_update"])
+        done = bool(resume_state.get("done", False))
+        history = list(resume_state["history"])
+
+    while not done and sweep <= max_sweeps:
+        for index in range(field_index, len(fields)):
+            field = fields[index]
             base_weight = weights[field]
             best_weight = base_weight
             best_factor = 1.0
@@ -124,11 +152,33 @@ def coordinate_search(
                 any_update = True
             if on_coordinate is not None:
                 on_coordinate(sweep, field, current_score)
+            if on_progress is not None:
+                on_progress({
+                    "weights": dict(weights),
+                    "current_score": current_score,
+                    "sweep": sweep,
+                    "next_field_index": index + 1,
+                    "any_update": any_update,
+                    "done": False,
+                    "history": list(history),
+                })
 
         if on_sweep is not None:
             on_sweep(sweep, dict(weights), current_score)
 
-        if not any_update:
-            break
+        done = not any_update or sweep == max_sweeps
+        sweep += 1
+        field_index = 0
+        any_update = False
+        if on_progress is not None:
+            on_progress({
+                "weights": dict(weights),
+                "current_score": current_score,
+                "sweep": sweep,
+                "next_field_index": field_index,
+                "any_update": any_update,
+                "done": done,
+                "history": list(history),
+            })
 
     return weights, current_score, history

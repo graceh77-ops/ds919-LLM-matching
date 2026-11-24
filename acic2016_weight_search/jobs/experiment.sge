@@ -5,7 +5,7 @@
 #$ -cwd
 #$ -V
 #$ -pe omp 4
-#$ -l h_rt=72:00:00
+#$ -l h_rt=120:00:00
 #$ -l mem_per_core=4G
 #$ -o logs/experiment.$JOB_ID.out
 #$ -e logs/experiment.$JOB_ID.err
